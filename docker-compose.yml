@@ -1,0 +1,44 @@
+# Local development / single-host deployment of Lumora Auth.
+#   docker compose up -d db          -> only PostgreSQL (run the site from IDE)
+#   docker compose up -d --build     -> PostgreSQL + site on http://localhost:8080
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lumora
+      POSTGRES_USER: lumora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumora}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumora -d lumora"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: src/Lumora.Auth.Web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Lumora: Host=db;Port=5432;Database=lumora;Username=lumora;Password=${POSTGRES_PASSWORD:-lumora}
+      Lumora__PublicUrl: ${LUMORA_PUBLIC_URL:-http://localhost:8080}
+      Lumora__DataPath: /data
+      Lumora__Admin__Email: ${LUMORA_ADMIN_EMAIL:-}
+      Lumora__Admin__Password: ${LUMORA_ADMIN_PASSWORD:-}
+    ports:
+      - "8080:8080"
+    volumes:
+      - lumora-data:/data
+
+volumes:
+  db-data:
+  lumora-data:

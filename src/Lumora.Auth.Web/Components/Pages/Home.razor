@@ -1,0 +1,16 @@
+@page "/"
+
+<PageTitle>Lumora</PageTitle>
+
+<h1>Lumora</h1>
+
+<p>Сервер авторизации Lumora: аккаунты, скины и сборки для Minecraft.</p>
+
+<AuthorizeView>
+    <Authorized>
+        <p>Вы вошли как <b>@context.User.Identity?.Name</b>.</p>
+    </Authorized>
+    <NotAuthorized>
+        <p><a href="Account/Register">Зарегистрируйтесь</a> или <a href="Account/Login">войдите</a>, чтобы играть.</p>
+    </NotAuthorized>
+</AuthorizeView>
