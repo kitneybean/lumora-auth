@@ -7,7 +7,8 @@
         "launchBrowser": true,
         "applicationUrl": "http://localhost:5080",
         "environmentVariables": {
-          "ASPNETCORE_ENVIRONMENT": "Development"
+          "ASPNETCORE_ENVIRONMENT": "Development",
+          "Lumora__PublicUrl": "http://127.0.0.1:5080"
         }
       },
       "https": {
