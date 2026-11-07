@@ -1,0 +1,169 @@
+@page "/admin/players"
+@rendermode InteractiveServer
+@using System.Security.Claims
+@inject PlayerAdminService PlayersService
+
+<PageTitle>Игроки — Lumora</PageTitle>
+
+<AdminNav />
+
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <input class="form-control" style="max-width: 320px" placeholder="E-mail или точный ник" @bind="query" @bind:after="SearchAsync" />
+    <button class="btn btn-outline-primary" @onclick="SearchAsync">Найти</button>
+    <span class="text-body-secondary small ms-auto">Всего: @total</span>
+</div>
+
+@if (message is not null) { <div class="alert alert-success py-2">@message</div> }
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr><th>Ник</th><th>E-mail</th><th>Регистрация</th><th>Статус</th><th class="text-end">Действия</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var p in rows)
+            {
+                <tr @key="p.UserId">
+                    <td>
+                        @if (p.PlayerName is null) { <span class="text-body-secondary">нет профиля</span> }
+                        else
+                        {
+                            <b>@p.PlayerName</b>
+                            @if (p.HasSkin) { <span class="badge text-bg-light border ms-1">скин</span> }
+                        }
+                    </td>
+                    <td class="text-break">@p.Email</td>
+                    <td class="text-nowrap small">@p.RegisteredAt.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                    <td>
+                        @if (p.IsAdmin) { <span class="badge text-bg-primary me-1">админ</span> }
+                        @if (p.BanReason is not null)
+                        {
+                            <span class="badge text-bg-danger" title="@p.BanReason">
+                                бан @(p.BannedUntil >= PlayerAdminService.Forever.AddYears(-1) ? "навсегда" : "до " + p.BannedUntil!.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm"))
+                            </span>
+                            <div class="small text-body-secondary">@p.BanReason</div>
+                        }
+                    </td>
+                    <td class="text-end">
+                        @if (banning == p.UserId)
+                        {
+                            <div class="d-flex flex-wrap gap-1 justify-content-end">
+                                <input class="form-control form-control-sm" style="max-width: 200px" placeholder="Причина" @bind="banReason" />
+                                <select class="form-select form-select-sm" style="max-width: 130px" @bind="banDays">
+                                    <option value="1">1 день</option>
+                                    <option value="7">7 дней</option>
+                                    <option value="30">30 дней</option>
+                                    <option value="0">Навсегда</option>
+                                </select>
+                                <button class="btn btn-sm btn-danger" disabled="@string.IsNullOrWhiteSpace(banReason)" @onclick="() => BanAsync(p)">Забанить</button>
+                                <button class="btn btn-sm btn-link" @onclick="() => banning = null">Отмена</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="btn-group btn-group-sm">
+                                @if (p.BanReason is null)
+                                {
+                                    <button class="btn btn-outline-danger" disabled="@(p.UserId == myId)" @onclick="() => StartBan(p)">Бан</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-outline-success" @onclick="() => UnbanAsync(p)">Разбанить</button>
+                                }
+                                @if (p.HasSkin)
+                                {
+                                    <button class="btn btn-outline-secondary" @onclick="() => ResetSkinAsync(p)">Сбросить скин</button>
+                                }
+                                <button class="btn btn-outline-secondary" disabled="@(p.UserId == myId)" @onclick="() => ToggleAdminAsync(p)">
+                                    @(p.IsAdmin ? "Снять админа" : "Сделать админом")
+                                </button>
+                            </div>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (total > PageSize)
+{
+    <nav class="d-flex gap-2 align-items-center">
+        <button class="btn btn-sm btn-outline-secondary" disabled="@(page == 0)" @onclick="() => GoAsync(page - 1)">← Назад</button>
+        <span class="small">Страница @(page + 1) из @((total + PageSize - 1) / PageSize)</span>
+        <button class="btn btn-sm btn-outline-secondary" disabled="@((page + 1) * PageSize >= total)" @onclick="() => GoAsync(page + 1)">Вперёд →</button>
+    </nav>
+}
+
+@code {
+    private const int PageSize = 50;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<PlayerAdminService.PlayerRow> rows = [];
+    private int total;
+    private int page;
+    private string query = "";
+    private string? myId;
+    private string? banning;
+    private string banReason = "";
+    private int banDays = 7;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+            myId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => (rows, total) = await PlayersService.SearchAsync(query, page * PageSize, PageSize);
+
+    private async Task SearchAsync()
+    {
+        page = 0;
+        await LoadAsync();
+    }
+
+    private async Task GoAsync(int p)
+    {
+        page = p;
+        await LoadAsync();
+    }
+
+    private void StartBan(PlayerAdminService.PlayerRow p)
+    {
+        banning = p.UserId;
+        banReason = "";
+        banDays = 7;
+    }
+
+    private async Task BanAsync(PlayerAdminService.PlayerRow p)
+    {
+        await PlayersService.BanAsync(p.UserId, banReason, banDays == 0 ? null : DateTimeOffset.UtcNow.AddDays(banDays));
+        banning = null;
+        message = $"{p.PlayerName ?? p.Email} забанен. Его сессии в лаунчере и на сайте завершены.";
+        await LoadAsync();
+    }
+
+    private async Task UnbanAsync(PlayerAdminService.PlayerRow p)
+    {
+        await PlayersService.UnbanAsync(p.UserId);
+        message = $"{p.PlayerName ?? p.Email} разбанен.";
+        await LoadAsync();
+    }
+
+    private async Task ResetSkinAsync(PlayerAdminService.PlayerRow p)
+    {
+        await PlayersService.ResetSkinAsync(p.UserId);
+        message = $"Скин {p.PlayerName} сброшен.";
+        await LoadAsync();
+    }
+
+    private async Task ToggleAdminAsync(PlayerAdminService.PlayerRow p)
+    {
+        await PlayersService.SetAdminAsync(p.UserId, !p.IsAdmin);
+        message = p.IsAdmin ? $"{p.Email} больше не админ." : $"{p.Email} теперь админ (нужно войти заново).";
+        await LoadAsync();
+    }
+}

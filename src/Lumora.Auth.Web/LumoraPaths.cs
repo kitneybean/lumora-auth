@@ -22,4 +22,13 @@ public sealed class LumoraPaths
     public string Textures => Path.Combine(Root, "textures");
 
     public string TextureFile(string hash) => Path.Combine(Textures, hash + ".png");
+
+    /// <summary>Build files, content-addressed by SHA-1: files/ab/abcdef….</summary>
+    public string Files => Path.Combine(Root, "files");
+
+    public string BuildFile(string sha1) => Path.Combine(Files, sha1[..2], sha1);
+
+    public string Temp => Path.Combine(Root, "tmp");
+
+    public string AuthlibInjector => Path.Combine(Root, "authlib-injector");
 }

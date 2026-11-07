@@ -1,0 +1,8 @@
+@using Microsoft.AspNetCore.Authorization
+@using Lumora.Auth.Data
+@using Lumora.Auth.Core.Entities
+@using Lumora.Auth.Web.Admin
+@using Lumora.Auth.Web.Builds
+@using Lumora.Auth.Web.Launcher
+@using Lumora.Contracts
+@attribute [Authorize(Roles = Roles.Admin)]

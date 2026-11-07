@@ -3,6 +3,7 @@ using Lumora.Auth.Web;
 using Lumora.Auth.Web.Components;
 using Lumora.Auth.Web.Components.Account;
 using Lumora.Auth.Web.Yggdrasil;
+using Lumora.Auth.Web.Launcher;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -30,7 +31,9 @@ builder.Services.AddAuthorization();
 
 var connectionString = builder.Configuration.GetConnectionString("Lumora")
     ?? throw new InvalidOperationException("Connection string 'Lumora' not found.");
-builder.Services.AddDbContext<LumoraDbContext>(options => options.UseNpgsql(connectionString));
+// Scoped context for Identity and requests; factory for interactive (Blazor Server) admin pages.
+builder.Services.AddDbContext<LumoraDbContext>(options => options.UseNpgsql(connectionString), optionsLifetime: ServiceLifetime.Singleton);
+builder.Services.AddDbContextFactory<LumoraDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
@@ -52,6 +55,14 @@ builder.Services.AddHealthChecks().AddDbContextCheck<LumoraDbContext>();
 builder.Services.AddYggdrasil(builder.Configuration);
 builder.Services.AddScoped<Lumora.Auth.Web.Profiles.ProfileService>();
 builder.Services.AddScoped<Lumora.Auth.Web.Textures.SkinService>();
+builder.Services.AddSingleton<Lumora.Auth.Web.Builds.BuildFileStore>();
+builder.Services.AddScoped<Lumora.Auth.Web.Builds.BuildService>();
+builder.Services.AddScoped<Lumora.Auth.Web.Builds.ServerService>();
+builder.Services.AddScoped<Lumora.Auth.Web.Admin.PlayerAdminService>();
+builder.Services.AddSingleton<Lumora.Auth.Web.Launcher.AuthlibInjectorProvider>();
+builder.Services.AddSingleton<Lumora.Auth.Web.Launcher.GameVersionsService>();
+builder.Services.AddHttpClient(nameof(Lumora.Auth.Web.Launcher.AuthlibInjectorProvider), c => c.Timeout = TimeSpan.FromMinutes(2));
+builder.Services.AddHttpClient(nameof(Lumora.Auth.Web.Launcher.GameVersionsService), c => c.Timeout = TimeSpan.FromSeconds(15));
 
 // Keep cookie keys across restarts and container rebuilds.
 var dataRoot = Path.GetFullPath(lumoraSection["DataPath"] ?? "data", builder.Environment.ContentRootPath);
@@ -87,6 +98,7 @@ app.UseAntiforgery();
 app.MapHealthChecks("/healthz");
 app.MapYggdrasil();
 app.MapTextures();
+app.MapLauncherApi();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

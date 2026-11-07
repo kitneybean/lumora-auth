@@ -1,0 +1,103 @@
+@page "/admin"
+@rendermode InteractiveServer
+@inject PlayerAdminService Players
+@inject AuthlibInjectorProvider Authlib
+
+<PageTitle>Админка — Lumora</PageTitle>
+
+<AdminNav />
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <a class="card admin-stat text-decoration-none" href="admin/players">
+            <div class="card-body"><div class="admin-stat-value">@counts.Players</div><div class="text-body-secondary">аккаунтов</div></div>
+        </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <a class="card admin-stat text-decoration-none" href="admin/builds">
+            <div class="card-body"><div class="admin-stat-value">@counts.PublishedBuilds / @counts.Builds</div><div class="text-body-secondary">сборок опубликовано</div></div>
+        </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <a class="card admin-stat text-decoration-none" href="admin/servers">
+            <div class="card-body"><div class="admin-stat-value">@counts.Servers</div><div class="text-body-secondary">серверов</div></div>
+        </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card admin-stat">
+            <div class="card-body">
+                <div class="admin-stat-value">@(authlib?.Version ?? "—")</div>
+                <div class="text-body-secondary">authlib-injector</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Как это устроено</h5>
+                <ol class="mb-0">
+                    <li class="mb-2"><b>Сборка</b> — версия Minecraft, лоадер (NeoForge) и файлы: моды, конфиги, ресурспаки.
+                        Изменения видны лаунчерам только после кнопки <b>«Опубликовать»</b>.</li>
+                    <li class="mb-2"><b>Сервер</b> — адрес игрового сервера, привязанный к сборке. Лаунчер показывает его карточкой,
+                        ставит нужную сборку и добавляет сервер в список серверов игры.</li>
+                    <li>На самом игровом сервере должны стоять те же версия, лоадер и моды (файлы «только клиент» не нужны),
+                        а также authlib-injector — см. репозиторий <code>lumora-gameserver</code>.</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">authlib-injector</h5>
+                <p class="text-body-secondary small">
+                    Подменяет в игре серверы Mojang на этот сайт, чтобы работали вход и скины. Сайт раздаёт копию jar
+                    лаунчерам и игровым серверам по адресу <code>/api/launcher/authlib-injector/download</code>.
+                </p>
+                @if (authlib is not null)
+                {
+                    <p class="small mb-2">Версия <b>@authlib.Version</b>, скачана @authlib.DownloadedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm").</p>
+                    <p class="small text-body-secondary text-break">SHA-256: <code>@authlib.Sha256</code></p>
+                }
+                else
+                {
+                    <p class="small text-warning-emphasis">Ещё не скачан.</p>
+                }
+                <button class="btn btn-outline-primary btn-sm" @onclick="UpdateAuthlibAsync" disabled="@updating">
+                    @(updating ? "Проверяю…" : "Проверить обновление")
+                </button>
+                @if (authlibMessage is not null)
+                {
+                    <div class="small mt-2">@authlibMessage</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private (int Players, int Builds, int PublishedBuilds, int Servers) counts;
+    private AuthlibInjectorProvider.Info? authlib;
+    private bool updating;
+    private string? authlibMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        counts = await Players.CountsAsync();
+        authlib = Authlib.ReadInfo();
+    }
+
+    private async Task UpdateAuthlibAsync()
+    {
+        updating = true;
+        authlibMessage = null;
+        var before = authlib?.Version;
+        authlib = await Authlib.UpdateAsync();
+        updating = false;
+        authlibMessage = authlib is null ? "Не удалось скачать — проверьте доступ сервера в интернет."
+            : authlib.Version == before ? "Установлена последняя версия." : $"Обновлено до {authlib.Version}.";
+    }
+}

@@ -1,0 +1,488 @@
+@page "/admin/builds/{Id:guid}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@inject BuildService BuildsService
+@inject GameVersionsService Versions
+@inject NavigationManager Nav
+@inject ILogger<BuildEdit> Logger
+
+<PageTitle>@(build?.Name ?? "Сборка") — Lumora</PageTitle>
+
+<AdminNav />
+
+@if (build is null)
+{
+    <p>@(notFound ? "Сборка не найдена." : "Загрузка…")</p>
+    return;
+}
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <a href="admin/builds" class="text-decoration-none">← Сборки</a>
+    <h2 class="h3 mb-0 ms-2">@build.Name</h2>
+    <BuildStatus IsPublished="build.IsPublished" Revision="build.Revision" HasChanges="build.HasUnpublishedChanges" />
+    <div class="ms-auto d-flex gap-2">
+        <button class="btn btn-success" @onclick="PublishAsync" disabled="@busy">
+            @(build.IsPublished ? "Опубликовать изменения" : "Опубликовать")
+        </button>
+        @if (build.IsPublished)
+        {
+            <button class="btn btn-outline-secondary" @onclick="UnpublishAsync" disabled="@busy">Снять с публикации</button>
+        }
+    </div>
+</div>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") py-2">@message</div>
+}
+@if (build.IsPublished && build.HasUnpublishedChanges)
+{
+    <div class="alert alert-warning py-2">
+        Лаунчеры пока получают ревизию r@(build.Revision). Нажмите «Опубликовать изменения», чтобы игроки получили новые файлы.
+    </div>
+}
+
+<div class="row g-4">
+    <!-- Files -->
+    <div class="col-xxl-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <h5 class="card-title mb-0">Файлы <span class="text-body-secondary fw-normal">@files.Count · @Builds.Size(files.Sum(f => f.Size))</span></h5>
+                    <input class="form-control form-control-sm ms-auto" style="max-width: 240px" placeholder="Фильтр по пути" @bind="filter" @bind:event="oninput" />
+                </div>
+
+                <div class="upload-zone mb-3">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-sm-4">
+                            <label class="form-label small mb-1">Папка для файлов</label>
+                            <input class="form-control form-control-sm" list="folders" @bind="uploadFolder" />
+                            <datalist id="folders">
+                                <option value="mods"></option><option value="config"></option><option value="resourcepacks"></option>
+                                <option value="shaderpacks"></option><option value="kubejs"></option><option value="defaultconfigs"></option>
+                            </datalist>
+                        </div>
+                        <div class="col-sm-8">
+                            <label class="form-label small mb-1">Файлы или ZIP-архив сборки</label>
+                            <InputFile class="form-control form-control-sm" multiple OnChange="UploadAsync" disabled="@busy" />
+                        </div>
+                    </div>
+                    <div class="form-text">
+                        Обычные файлы кладутся в выбранную папку. <b>ZIP</b> распаковывается в корень сборки с сохранением папок
+                        (<code>mods/</code>, <code>config/</code> …) — удобно залить готовую сборку целиком. Файл с тем же путём заменяется.
+                    </div>
+                    @if (uploadStatus is not null)
+                    {
+                        <div class="small mt-2">@uploadStatus</div>
+                    }
+                </div>
+
+                @if (files.Count == 0)
+                {
+                    <p class="text-body-secondary mb-0">Файлов пока нет. Для NeoForge-сборки загрузите моды (.jar) в папку <code>mods</code>.</p>
+                }
+                else
+                {
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <button class="btn btn-sm btn-outline-danger" disabled="@(selected.Count == 0 || busy)" @onclick="DeleteSelectedAsync">
+                            Удалить выбранные (@selected.Count)
+                        </button>
+                        <span class="small text-body-secondary">«Опционально» — игрок может выключить файл в настройках сборки в лаунчере.</span>
+                    </div>
+                    <div class="table-responsive build-files">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 28px"><input type="checkbox" class="form-check-input" checked="@AllSelected" @onchange="ToggleAll" /></th>
+                                    <th>Путь</th><th>Размер</th><th>Где нужен</th><th>Установка</th><th>Название для игрока</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var f in VisibleFiles)
+                                {
+                                    <tr @key="f.Id">
+                                        <td><input type="checkbox" class="form-check-input" checked="@selected.Contains(f.Id)" @onchange="e => Toggle(f.Id, (bool)e.Value!)" /></td>
+                                        <td class="text-break"><code>@f.Path</code></td>
+                                        <td class="text-nowrap small">@Builds.Size(f.Size)</td>
+                                        <td>
+                                            <select class="form-select form-select-sm" value="@f.Side" @onchange="e => SaveFileAsync(f, side: Enum.Parse<FileSide>((string)e.Value!))">
+                                                <option value="@FileSide.Both">Везде</option>
+                                                <option value="@FileSide.Client">Только клиент</option>
+                                                <option value="@FileSide.Server">Только сервер</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm" value="@f.Mode" @onchange="e => SaveFileAsync(f, mode: Enum.Parse<FileInstallMode>((string)e.Value!))">
+                                                <option value="@FileInstallMode.Required">Обязательно</option>
+                                                <option value="@FileInstallMode.OptionalOn">Опционально, вкл.</option>
+                                                <option value="@FileInstallMode.OptionalOff">Опционально, выкл.</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            @if (f.Mode != FileInstallMode.Required)
+                                            {
+                                                <input class="form-control form-control-sm" value="@f.DisplayName" placeholder="напр. Миникарта"
+                                                       @onchange="e => SaveFileAsync(f, displayName: e.Value?.ToString() ?? string.Empty)" />
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="col-xxl-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Параметры</h5>
+                <div class="mb-2">
+                    <label class="form-label">Название</label>
+                    <input class="form-control" @bind="edit.Name" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Описание <span class="text-body-secondary small">(для админов)</span></label>
+                    <textarea class="form-control" rows="2" @bind="edit.Description"></textarea>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label">Minecraft</label>
+                        <input class="form-control" list="mc-versions" @bind="edit.MinecraftVersion" @bind:after="LoadLoaderVersionsAsync" />
+                        <datalist id="mc-versions">
+                            @foreach (var v in mcVersions) { <option value="@v"></option> }
+                        </datalist>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Лоадер</label>
+                        <select class="form-select" @bind="edit.Loader">
+                            @foreach (var l in Enum.GetValues<LoaderType>()) { <option value="@l">@l</option> }
+                        </select>
+                    </div>
+                </div>
+                @if (edit.Loader != LoaderType.Vanilla)
+                {
+                    <div class="mb-2">
+                        <label class="form-label">Версия лоадера</label>
+                        <input class="form-control" list="loader-versions" @bind="edit.LoaderVersion" />
+                        <datalist id="loader-versions">
+                            @foreach (var v in loaderVersions) { <option value="@v"></option> }
+                        </datalist>
+                        @if (edit.Loader == LoaderType.NeoForge && loaderVersions.Count > 0 && loaderVersions[0] != edit.LoaderVersion)
+                        {
+                            <div class="form-text">Есть новее: <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @onclick="() => edit.LoaderVersion = loaderVersions[0]">@loaderVersions[0]</button></div>
+                        }
+                    </div>
+                }
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label">Java</label>
+                        <input class="form-control" type="number" min="8" max="30" @bind="edit.JavaMajorVersion" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Рекоменд. ОЗУ, МБ</label>
+                        <input class="form-control" type="number" min="1024" step="512" @bind="edit.RecommendedMemoryMb" />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Обязательные аргументы JVM</label>
+                    <textarea class="form-control font-monospace small" rows="3" @bind="jvmArgs" placeholder="-XX:+UseG1GC"></textarea>
+                    <div class="form-text">По одному на строку. Игрок не может их убрать, только добавить свои.</div>
+                </div>
+
+                <h6>Синхронизация папок</h6>
+                <p class="small text-body-secondary mb-2">
+                    <b>Строго</b> — лишние файлы игрока удаляются (для <code>mods</code>). <b>Добавлять</b> — файлы сборки
+                    обновляются, свои файлы игрока остаются. <b>Если нет</b> — файл кладётся, только если у игрока его нет.
+                </p>
+                @foreach (var rule in rules)
+                {
+                    <div class="input-group input-group-sm mb-1">
+                        <input class="form-control" @bind="rule.Path" placeholder="папка или файл" />
+                        <select class="form-select" style="max-width: 130px" @bind="rule.Policy">
+                            <option value="@SyncPolicy.Strict">Строго</option>
+                            <option value="@SyncPolicy.AddOrUpdate">Добавлять</option>
+                            <option value="@SyncPolicy.CreateIfMissing">Если нет</option>
+                        </select>
+                        <button class="btn btn-outline-secondary" title="Убрать" @onclick="() => rules.Remove(rule)">×</button>
+                    </div>
+                }
+                <button class="btn btn-link btn-sm px-0 mb-3" @onclick="() => rules.Add(new SyncRule { Path = string.Empty, Policy = SyncPolicy.AddOrUpdate })">+ правило</button>
+
+                <button class="btn btn-primary w-100" @onclick="SaveSettingsAsync" disabled="@busy">Сохранить параметры</button>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Серверы на этой сборке</h5>
+                @if (build.Servers.Count == 0)
+                {
+                    <p class="text-body-secondary small mb-2">Ни один сервер не привязан — игроки не увидят сборку в лаунчере.</p>
+                }
+                <ul class="list-unstyled mb-2">
+                    @foreach (var s in build.Servers)
+                    {
+                        <li><b>@s.Name</b> <code class="small">@s.ConnectionString</code> @if (!s.IsEnabled) { <span class="badge text-bg-secondary">выключен</span> }</li>
+                    }
+                </ul>
+                <a href="admin/servers" class="btn btn-outline-primary btn-sm">Серверы →</a>
+            </div>
+        </div>
+
+        <div class="card border-danger-subtle">
+            <div class="card-body">
+                <h6 class="text-danger">Удаление сборки</h6>
+                <p class="small text-body-secondary">Привязанные серверы останутся, но пропадут из лаунчера, пока их не привяжут к другой сборке.</p>
+                @if (!confirmDelete)
+                {
+                    <button class="btn btn-outline-danger btn-sm" @onclick="() => confirmDelete = true">Удалить сборку…</button>
+                }
+                else
+                {
+                    <button class="btn btn-danger btn-sm" @onclick="DeleteAsync">Да, удалить «@build.Name»</button>
+                    <button class="btn btn-link btn-sm" @onclick="() => confirmDelete = false">Отмена</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private const long MaxFileSize = 1024L * 1024 * 1024;
+
+    [Parameter] public Guid Id { get; set; }
+
+    private GameBuild? build;
+    private bool notFound;
+    private GameBuild edit = new() { Name = "", MinecraftVersion = "" };
+    private string jvmArgs = "";
+    private List<SyncRule> rules = [];
+    private List<BuildFile> files = [];
+    private readonly HashSet<Guid> selected = [];
+    private string filter = "";
+    private string uploadFolder = "mods";
+    private string? uploadStatus;
+    private IReadOnlyList<string> mcVersions = [];
+    private IReadOnlyList<string> loaderVersions = [];
+    private bool busy;
+    private bool confirmDelete;
+    private string? message;
+    private bool messageIsError;
+
+    private IEnumerable<BuildFile> VisibleFiles => string.IsNullOrWhiteSpace(filter)
+        ? files
+        : files.Where(f => f.Path.Contains(filter.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private bool AllSelected => files.Count > 0 && VisibleFiles.All(f => selected.Contains(f.Id));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync(resetForm: true);
+    }
+
+    // Version suggestions come from the internet (slow): load them after the page is shown.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        mcVersions = await Versions.MinecraftReleasesAsync();
+        await LoadLoaderVersionsAsync();
+        StateHasChanged();
+    }
+
+    private async Task ReloadAsync(bool resetForm)
+    {
+        build = await BuildsService.GetAsync(Id);
+        notFound = build is null;
+        if (build is null)
+            return;
+        files = build.Files;
+        selected.IntersectWith(files.Select(f => f.Id));
+        if (!resetForm)
+            return;
+        edit = new GameBuild
+        {
+            Id = build.Id, Name = build.Name, Description = build.Description, MinecraftVersion = build.MinecraftVersion,
+            Loader = build.Loader, LoaderVersion = build.LoaderVersion, JavaMajorVersion = build.JavaMajorVersion,
+            RecommendedMemoryMb = build.RecommendedMemoryMb,
+        };
+        jvmArgs = string.Join('\n', build.JvmArguments);
+        rules = build.SyncRules.Select(r => new SyncRule { Path = r.Path, Policy = r.Policy }).ToList();
+    }
+
+    private async Task LoadLoaderVersionsAsync() =>
+        loaderVersions = await Versions.NeoForgeVersionsAsync(edit.MinecraftVersion ?? "");
+
+    private async Task SaveSettingsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(edit.Name) || string.IsNullOrWhiteSpace(edit.MinecraftVersion))
+        {
+            Show("Название и версия Minecraft обязательны.", error: true);
+            return;
+        }
+        if (edit.Loader != LoaderType.Vanilla && string.IsNullOrWhiteSpace(edit.LoaderVersion))
+        {
+            Show("Укажите версию лоадера.", error: true);
+            return;
+        }
+        edit.JvmArguments = jvmArgs.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        edit.SyncRules = rules;
+        await RunAsync(async () =>
+        {
+            await BuildsService.UpdateSettingsAsync(edit);
+            await ReloadAsync(resetForm: true);
+            Show("Параметры сохранены.");
+        });
+    }
+
+    private async Task UploadAsync(InputFileChangeEventArgs e)
+    {
+        var list = e.GetMultipleFiles(500);
+        int added = 0, updated = 0;
+        var skipped = new List<string>();
+        await RunAsync(async () =>
+        {
+            for (var i = 0; i < list.Count; i++)
+            {
+                var file = list[i];
+                uploadStatus = $"Загружаю {file.Name} ({i + 1} из {list.Count}, {Builds.Size(file.Size)})…";
+                StateHasChanged();
+                if (file.Size > MaxFileSize)
+                {
+                    skipped.Add($"{file.Name} (больше 1 ГБ)");
+                    continue;
+                }
+
+                await using var browserStream = file.OpenReadStream(MaxFileSize);
+                BuildService.AddResult result;
+                if (file.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    // ZipArchive needs a seekable stream: spool to a temp file first.
+                    var tmp = Path.Combine(Path.GetTempPath(), "lumora-upload-" + Guid.NewGuid().ToString("N") + ".zip");
+                    await using (var spool = new FileStream(tmp, FileMode.Create, FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.DeleteOnClose))
+                    {
+                        await browserStream.CopyToAsync(spool);
+                        spool.Position = 0;
+                        try
+                        {
+                            result = await BuildsService.AddZipAsync(Id, spool, folder: null);
+                        }
+                        catch (InvalidDataException)
+                        {
+                            skipped.Add($"{file.Name} (повреждённый архив)");
+                            continue;
+                        }
+                    }
+                }
+                else
+                {
+                    var path = Lumora.Auth.Core.Builds.BuildPath.Combine(uploadFolder, file.Name);
+                    if (path is null)
+                    {
+                        skipped.Add(file.Name);
+                        continue;
+                    }
+                    result = await BuildsService.AddFileAsync(Id, path, browserStream);
+                }
+                added += result.Added;
+                updated += result.Updated;
+                skipped.AddRange(result.Skipped);
+            }
+            await ReloadAsync(resetForm: false);
+            uploadStatus = $"Готово: добавлено {added}, заменено {updated}."
+                + (skipped.Count > 0 ? $" Пропущено ({skipped.Count}): {string.Join(", ", skipped.Take(10))}{(skipped.Count > 10 ? "…" : "")}" : "");
+        });
+    }
+
+    private async Task SaveFileAsync(BuildFile f, FileSide? side = null, FileInstallMode? mode = null, string? displayName = null)
+    {
+        f.Side = side ?? f.Side;
+        f.Mode = mode ?? f.Mode;
+        if (displayName is not null)
+            f.DisplayName = displayName;
+        await RunAsync(async () =>
+        {
+            await BuildsService.UpdateFileAsync(f.Id, f.Side, f.Mode, f.DisplayName);
+            await ReloadAsync(resetForm: false);
+        });
+    }
+
+    private void Toggle(Guid id, bool on)
+    {
+        if (on) selected.Add(id); else selected.Remove(id);
+    }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        if ((bool)e.Value!)
+            selected.UnionWith(VisibleFiles.Select(f => f.Id));
+        else
+            selected.ExceptWith(VisibleFiles.Select(f => f.Id));
+    }
+
+    private async Task DeleteSelectedAsync()
+    {
+        var count = selected.Count;
+        await RunAsync(async () =>
+        {
+            await BuildsService.DeleteFilesAsync(Id, selected.ToList());
+            selected.Clear();
+            await ReloadAsync(resetForm: false);
+            Show($"Удалено файлов: {count}.");
+        });
+    }
+
+    private async Task PublishAsync()
+    {
+        if (build is { Servers.Count: 0 })
+            Show("Сборка опубликована, но к ней не привязан ни один сервер.", error: false);
+        await RunAsync(async () =>
+        {
+            var revision = await BuildsService.PublishAsync(Id);
+            await ReloadAsync(resetForm: false);
+            Show($"Опубликована ревизия r{revision}. Лаунчеры обновят сборку при следующем запуске.");
+        });
+    }
+
+    private async Task UnpublishAsync() => await RunAsync(async () =>
+    {
+        await BuildsService.UnpublishAsync(Id);
+        await ReloadAsync(resetForm: false);
+        Show("Сборка скрыта из лаунчера.");
+    });
+
+    private async Task DeleteAsync()
+    {
+        await BuildsService.DeleteAsync(Id);
+        Nav.NavigateTo("admin/builds");
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        message = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Build edit failed");
+            Show("Ошибка: " + ex.Message, error: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Show(string text, bool error = false)
+    {
+        message = text;
+        messageIsError = error;
+    }
+}

@@ -110,3 +110,48 @@ h1:focus {
     width: 256px;
     image-rendering: pixelated;
 }
+
+/* --- Admin --- */
+.admin-stat {
+    height: 100%;
+    color: inherit;
+}
+
+.admin-stat-value {
+    font-size: 1.75rem;
+    font-weight: 600;
+}
+
+.upload-zone {
+    border: 1px dashed var(--bs-border-color);
+    border-radius: .5rem;
+    padding: .75rem 1rem;
+    background: var(--bs-tertiary-bg);
+}
+
+.build-files {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.build-files thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bs-body-bg);
+    z-index: 1;
+}
+
+.server-icon {
+    border-radius: 6px;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+
+.server-icon-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #18a35e, #2f6fdb);
+}

@@ -1,0 +1,227 @@
+@page "/admin/servers"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@inject ServerService ServersService
+@inject BuildService BuildsService
+
+<PageTitle>Серверы — Lumora</PageTitle>
+
+<AdminNav />
+
+<div class="row g-4">
+    <div class="col-xl-7">
+        @if (servers is null)
+        {
+            <p>Загрузка…</p>
+        }
+        else if (servers.Count == 0)
+        {
+            <div class="alert alert-info">Серверов пока нет. Добавьте сервер и привяжите его к сборке.</div>
+        }
+        else
+        {
+            <div class="list-group">
+                @foreach (var s in servers)
+                {
+                    <button type="button" class="list-group-item list-group-item-action d-flex gap-3 align-items-center @(edit?.Id == s.Id ? "active" : "")" @onclick="() => Edit(s)">
+                        <ServerIconView Base64="@s.IconBase64" Name="@s.Name" />
+                        <div class="flex-grow-1 text-start">
+                            <div class="fw-semibold">@s.Name @if (!s.IsEnabled) { <span class="badge text-bg-secondary ms-1">выключен</span> }</div>
+                            <div class="small"><code class="@(edit?.Id == s.Id ? "text-white" : "")">@s.ConnectionString</code></div>
+                        </div>
+                        <div class="text-end small">
+                            @if (s.GameBuild is { } b)
+                            {
+                                <div>@b.Name</div>
+                                <div class="opacity-75">@b.MinecraftVersion · @Builds.LoaderText(b.Loader, b.LoaderVersion)</div>
+                                @if (!b.IsPublished) { <span class="badge text-bg-warning">сборка не опубликована</span> }
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-danger">нет сборки</span>
+                            }
+                        </div>
+                    </button>
+                }
+            </div>
+            <p class="small text-body-secondary mt-2">Порядок в лаунчере — по полю «Порядок», затем по названию.</p>
+        }
+        <button class="btn btn-primary mt-3" @onclick="New">+ Добавить сервер</button>
+    </div>
+
+    <div class="col-xl-5">
+        @if (edit is not null)
+        {
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">@(isNew ? "Новый сервер" : edit.Name)</h5>
+                    <div class="d-flex gap-3 align-items-center mb-3">
+                        <ServerIconView Base64="@edit.IconBase64" Name="@edit.Name" Size="64" />
+                        <div class="flex-grow-1">
+                            <label class="form-label small mb-1">Иконка (обрежется до квадрата 64×64)</label>
+                            <InputFile class="form-control form-control-sm" accept="image/png,image/jpeg,image/webp" OnChange="IconAsync" />
+                            @if (edit.IconBase64 is not null)
+                            {
+                                <button class="btn btn-link btn-sm px-0" @onclick="() => edit.IconBase64 = null">Убрать иконку</button>
+                            }
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Название</label>
+                        <input class="form-control" @bind="edit.Name" placeholder="Lumora Survival" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Описание для игроков</label>
+                        <textarea class="form-control" rows="2" @bind="edit.Description" placeholder="Выживание с экономикой и приватами"></textarea>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-8">
+                            <label class="form-label">Адрес</label>
+                            <input class="form-control" @bind="edit.Address" placeholder="play.example.com" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">Порт</label>
+                            <input class="form-control" type="number" min="1" max="65535" @bind="edit.Port" />
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Сборка</label>
+                        <select class="form-select" @bind="edit.GameBuildId">
+                            <option value="">— не выбрана —</option>
+                            @foreach (var b in builds)
+                            {
+                                <option value="@b.Id">@b.Name (@b.MinecraftVersion, @Builds.LoaderText(b.Loader, b.LoaderVersion))@(b.IsPublished ? "" : " — черновик")</option>
+                            }
+                        </select>
+                        <div class="form-text">Лаунчер поставит эту сборку, чтобы зайти на сервер. Сервер виден игрокам, только если сборка опубликована.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Порядок</label>
+                        <input class="form-control" type="number" @bind="edit.SortOrder" style="max-width: 120px" />
+                    </div>
+                    <div class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" id="srv-enabled" @bind="edit.IsEnabled" />
+                        <label class="form-check-label" for="srv-enabled">Показывать в лаунчере</label>
+                    </div>
+                    <div class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" id="srv-list" @bind="edit.AddToServerList" />
+                        <label class="form-check-label" for="srv-list">Добавлять в список серверов игры</label>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="srv-auto" @bind="edit.AutoConnect" />
+                        <label class="form-check-label" for="srv-auto">Сразу подключаться при запуске игры</label>
+                    </div>
+                    @if (error is not null) { <div class="alert alert-danger py-2">@error</div> }
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary" @onclick="SaveAsync">Сохранить</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => edit = null">Отмена</button>
+                        @if (!isNew)
+                        {
+                            @if (!confirmDelete)
+                            {
+                                <button class="btn btn-outline-danger ms-auto" @onclick="() => confirmDelete = true">Удалить</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-danger ms-auto" @onclick="DeleteAsync">Точно удалить</button>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else if (saved is not null)
+        {
+            <div class="alert alert-success">@saved</div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<GameServer>? servers;
+    private List<BuildService.BuildSummary> builds = [];
+    private GameServer? edit;
+    private bool isNew;
+    private bool confirmDelete;
+    private string? error;
+    private string? saved;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        servers = await ServersService.ListAsync();
+        builds = await BuildsService.ListAsync();
+    }
+
+    private void New()
+    {
+        isNew = true;
+        confirmDelete = false;
+        error = null;
+        edit = new GameServer
+        {
+            Name = "",
+            Address = "",
+            GameBuildId = builds.FirstOrDefault(b => b.IsPublished)?.Id ?? builds.FirstOrDefault()?.Id,
+            SortOrder = (servers?.Count ?? 0) * 10,
+        };
+    }
+
+    private void Edit(GameServer s)
+    {
+        isNew = false;
+        confirmDelete = false;
+        error = null;
+        edit = new GameServer
+        {
+            Id = s.Id, Name = s.Name, Description = s.Description, Address = s.Address, Port = s.Port, IconBase64 = s.IconBase64,
+            GameBuildId = s.GameBuildId, SortOrder = s.SortOrder, AddToServerList = s.AddToServerList, AutoConnect = s.AutoConnect,
+            IsEnabled = s.IsEnabled,
+        };
+    }
+
+    private async Task IconAsync(InputFileChangeEventArgs e)
+    {
+        if (edit is null)
+            return;
+        error = null;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(Lumora.Auth.Core.Textures.ServerIcon.MaxUploadBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            edit.IconBase64 = ServerService.MakeIcon(buffer.ToArray());
+        }
+        catch (Lumora.Auth.Core.Textures.TextureImages.InvalidTextureException ex)
+        {
+            error = ex.Message;
+        }
+        catch (IOException)
+        {
+            error = "Иконка должна быть до 2 МБ.";
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (edit is null)
+            return;
+        error = await ServersService.SaveAsync(edit);
+        if (error is not null)
+            return;
+        saved = $"Сервер «{edit.Name}» сохранён.";
+        edit = null;
+        await ReloadAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (edit is null)
+            return;
+        await ServersService.DeleteAsync(edit.Id);
+        saved = $"Сервер «{edit.Name}» удалён.";
+        edit = null;
+        await ReloadAsync();
+    }
+}

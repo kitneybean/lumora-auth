@@ -10,7 +10,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Lumora.Auth.Tests;
 
 /// <summary>End-to-end checks of the Yggdrasil API as authlib-injector uses it.</summary>
-public class YggdrasilApiTests(LumoraAppFactory app) : IClassFixture<LumoraAppFactory>
+[Collection(AppCollection.Name)]
+public class YggdrasilApiTests(LumoraAppFactory app)
 {
     private const string Api = "/api/yggdrasil";
     private readonly HttpClient _http = app.CreateClient();

@@ -1,0 +1,19 @@
+@if (!IsPublished)
+{
+    <span class="badge text-bg-secondary">@(Revision == 0 ? "Черновик" : "Снята с публикации")</span>
+}
+else if (HasChanges)
+{
+    <span class="badge text-bg-success">Опубликована r@(Revision)</span>
+    <span class="badge text-bg-warning ms-1">Есть изменения</span>
+}
+else
+{
+    <span class="badge text-bg-success">Опубликована r@(Revision)</span>
+}
+
+@code {
+    [Parameter] public bool IsPublished { get; set; }
+    [Parameter] public int Revision { get; set; }
+    [Parameter] public bool HasChanges { get; set; }
+}

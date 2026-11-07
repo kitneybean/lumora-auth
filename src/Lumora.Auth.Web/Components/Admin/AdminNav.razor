@@ -1,0 +1,13 @@
+@* Tabs shown on every admin page. Not routable, so no [Authorize] needed here. *@
+<div class="d-flex align-items-center gap-3 mb-3">
+    <h1 class="mb-0">Админка</h1>
+</div>
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item"><NavLink class="nav-link" href="admin" Match="NavLinkMatch.All">Обзор</NavLink></li>
+    <li class="nav-item"><NavLink class="nav-link" href="admin/builds">Сборки</NavLink></li>
+    <li class="nav-item"><NavLink class="nav-link" href="admin/servers">Серверы</NavLink></li>
+    <li class="nav-item"><NavLink class="nav-link" href="admin/players">Игроки</NavLink></li>
+</ul>
+
+@code {
+}

@@ -1,0 +1,138 @@
+@page "/admin/builds"
+@rendermode InteractiveServer
+@inject BuildService BuildsService
+@inject GameVersionsService Versions
+@inject NavigationManager Nav
+
+<PageTitle>Сборки — Lumora</PageTitle>
+
+<AdminNav />
+
+<div class="row g-4">
+    <div class="col-xl-8">
+        @if (builds is null)
+        {
+            <p>Загрузка…</p>
+        }
+        else if (builds.Count == 0)
+        {
+            <div class="alert alert-info">Сборок пока нет. Создайте первую в форме «Новая сборка».</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr><th>Сборка</th><th>Версия</th><th>Файлы</th><th>Серверы</th><th>Статус</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var b in builds)
+                        {
+                            <tr>
+                                <td><a href="admin/builds/@b.Id" class="fw-semibold">@b.Name</a></td>
+                                <td>@b.MinecraftVersion · @LoaderText(b.Loader, b.LoaderVersion)</td>
+                                <td>@b.FileCount <span class="text-body-secondary small">(@Size(b.TotalSize))</span></td>
+                                <td>@b.ServerCount</td>
+                                <td><BuildStatus IsPublished="b.IsPublished" Revision="b.Revision" HasChanges="b.HasUnpublishedChanges" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Новая сборка</h5>
+                <div class="mb-2">
+                    <label class="form-label">Название</label>
+                    <input class="form-control" @bind="name" placeholder="Lumora Survival" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Версия Minecraft</label>
+                    <input class="form-control" list="mc-versions" @bind="mcVersion" @bind:after="LoadLoaderVersionsAsync" />
+                    <datalist id="mc-versions">
+                        @foreach (var v in mcVersions) { <option value="@v"></option> }
+                    </datalist>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Лоадер</label>
+                    <select class="form-select" @bind="loader">
+                        @foreach (var l in Enum.GetValues<LoaderType>()) { <option value="@l">@l</option> }
+                    </select>
+                </div>
+                @if (loader != LoaderType.Vanilla)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Версия лоадера</label>
+                        <input class="form-control" list="loader-versions" @bind="loaderVersion" placeholder="@(loaderVersions.FirstOrDefault() ?? "21.1.77")" />
+                        <datalist id="loader-versions">
+                            @foreach (var v in loaderVersions) { <option value="@v"></option> }
+                        </datalist>
+                        @if (loader == LoaderType.NeoForge && loaderVersions.Count > 0)
+                        {
+                            <div class="form-text">Последняя для @mcVersion: <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @onclick="() => loaderVersion = loaderVersions[0]">@loaderVersions[0]</button></div>
+                        }
+                    </div>
+                }
+                @if (error is not null) { <div class="alert alert-danger py-2">@error</div> }
+                <button class="btn btn-primary w-100" @onclick="CreateAsync">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<BuildService.BuildSummary>? builds;
+    private IReadOnlyList<string> mcVersions = [];
+    private IReadOnlyList<string> loaderVersions = [];
+    private string name = "";
+    private string mcVersion = "1.21.1";
+    private LoaderType loader = LoaderType.NeoForge;
+    private string? loaderVersion;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        builds = await BuildsService.ListAsync();
+    }
+
+    // Version suggestions come from the internet (slow): load them after the page is shown.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        mcVersions = await Versions.MinecraftReleasesAsync();
+        await LoadLoaderVersionsAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadLoaderVersionsAsync() =>
+        loaderVersions = await Versions.NeoForgeVersionsAsync(mcVersion);
+
+    private async Task CreateAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name)) { error = "Укажите название."; return; }
+        if (string.IsNullOrWhiteSpace(mcVersion)) { error = "Укажите версию Minecraft."; return; }
+        if (loader != LoaderType.Vanilla && string.IsNullOrWhiteSpace(loaderVersion))
+            loaderVersion = loaderVersions.FirstOrDefault();
+        if (loader != LoaderType.Vanilla && string.IsNullOrWhiteSpace(loaderVersion)) { error = "Укажите версию лоадера."; return; }
+
+        var id = await BuildsService.CreateAsync(name, mcVersion, loader, loaderVersion);
+        Nav.NavigateTo($"admin/builds/{id}");
+    }
+
+    public static string LoaderText(LoaderType loader, string? version) =>
+        loader == LoaderType.Vanilla ? "Vanilla" : $"{loader} {version}";
+
+    public static string Size(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} Б",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} КБ",
+        < 1024L * 1024 * 1024 => $"{bytes / 1024.0 / 1024:0.#} МБ",
+        _ => $"{bytes / 1024.0 / 1024 / 1024:0.##} ГБ",
+    };
+}

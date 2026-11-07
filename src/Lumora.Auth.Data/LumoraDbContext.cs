@@ -60,6 +60,8 @@ public class LumoraDbContext(DbContextOptions<LumoraDbContext> options)
             e.Property(b => b.MinecraftVersion).HasMaxLength(32);
             e.Property(b => b.LoaderVersion).HasMaxLength(64);
             e.Property(b => b.Loader).HasConversion<string>().HasMaxLength(16);
+            e.Ignore(b => b.HasUnpublishedChanges);
+            e.Property(b => b.PublishedManifestJson).HasColumnType("jsonb");
             e.HasMany(b => b.Files).WithOne().HasForeignKey(f => f.GameBuildId).OnDelete(DeleteBehavior.Cascade);
             e.OwnsMany(b => b.SyncRules, r =>
             {

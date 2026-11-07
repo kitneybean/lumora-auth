@@ -31,9 +31,22 @@ public class GameBuild
 
     public bool IsPublished { get; set; }
 
+    /// <summary>When the current revision was published.</summary>
+    public DateTimeOffset? PublishedAt { get; set; }
+
+    /// <summary>
+    /// Manifest frozen at publish time (JSON of <see cref="BuildManifestDto"/> without URLs and servers).
+    /// Launchers get this snapshot, so edits in progress are not visible until the next publish.
+    /// </summary>
+    public string? PublishedManifestJson { get; set; }
+
+    /// <summary>True when the build was changed after the last publish.</summary>
+    public bool HasUnpublishedChanges => PublishedAt is null || UpdatedAt > PublishedAt;
+
     public List<BuildFile> Files { get; set; } = [];
 
-    public List<SyncRule> SyncRules { get; set; } = DefaultSyncRules();
+    // Empty by default: EF appends stored rules when loading, so defaults must not be pre-filled here.
+    public List<SyncRule> SyncRules { get; set; } = [];
 
     public List<GameServer> Servers { get; set; } = [];
 

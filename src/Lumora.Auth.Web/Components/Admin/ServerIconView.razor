@@ -1,0 +1,16 @@
+@if (Base64 is not null)
+{
+    <img src="data:image/png;base64,@Base64" width="@Size" height="@Size" class="server-icon" alt="" />
+}
+else
+{
+    <div class="server-icon server-icon-empty" style="width: @(Size)px; height: @(Size)px; font-size: @(Size / 2)px">
+        @(string.IsNullOrWhiteSpace(Name) ? "?" : Name.Trim()[0].ToString().ToUpperInvariant())
+    </div>
+}
+
+@code {
+    [Parameter] public string? Base64 { get; set; }
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public int Size { get; set; } = 40;
+}

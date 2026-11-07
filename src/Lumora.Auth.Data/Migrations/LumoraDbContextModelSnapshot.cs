@@ -108,6 +108,12 @@ namespace Lumora.Auth.Data.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedManifestJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<int>("RecommendedMemoryMb")
                         .HasColumnType("integer");
 
