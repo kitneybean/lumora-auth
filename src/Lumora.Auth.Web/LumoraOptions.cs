@@ -23,6 +23,9 @@ public sealed class LumoraOptions
     /// <summary>Older tokens of a user are revoked beyond this count.</summary>
     public int MaxTokensPerUser { get; set; } = 10;
 
+    /// <summary>Running behind a reverse proxy: trust X-Forwarded-For/Proto/Host.</summary>
+    public bool BehindProxy { get; set; }
+
     /// <summary>Skip migrations/seeding on startup (tests, design-time tools).</summary>
     public bool SkipDatabaseInit { get; set; }
 

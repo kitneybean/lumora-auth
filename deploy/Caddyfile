@@ -1,0 +1,10 @@
+# Caddy obtains and renews the HTTPS certificate for the domain automatically.
+# To get Let's Encrypt expiry notices, add a global block with: email you@example.com
+{$LUMORA_DOMAIN} {
+	encode zstd gzip
+	# Build files (mods) can be large.
+	request_body {
+		max_size 1GB
+	}
+	reverse_proxy web:8080
+}

@@ -29,7 +29,7 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__Lumora: Host=db;Port=5432;Database=lumora;Username=lumora;Password=${POSTGRES_PASSWORD:-lumora}
+      ConnectionStrings__Lumora: Host=db;Port=5432;Database=lumora;Username=lumora;Password=${POSTGRES_PASSWORD:-lumora};GSS Encryption Mode=Disable
       Lumora__PublicUrl: ${LUMORA_PUBLIC_URL:-http://localhost:8080}
       Lumora__DataPath: /data
       Lumora__Admin__Email: ${LUMORA_ADMIN_EMAIL:-}

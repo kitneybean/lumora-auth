@@ -129,3 +129,27 @@ authlib-injector (AGPL-3.0, [исходники](https://github.com/yushijinhun/
    (клиентские моды — «Только клиент») → «Опубликовать».
 
 Тест с настоящим скачиванием с Modrinth: `LUMORA_NETWORK_TESTS=1 dotnet test`.
+
+## Развёртывание на сервере (HTTPS)
+
+Нужен VPS с Linux (от 2 ГБ ОЗУ), домен и Docker.
+
+1. **DNS:** A-запись `auth.example.com` → IP сервера. Откройте порты 80 и 443.
+2. **Код:** `git clone <репозиторий lumora-auth> && cd lumora-auth/deploy`
+3. **Настройки:** `cp .env.example .env` и заполните домен, пароль базы и первого админа.
+4. **Запуск:** `docker compose up -d --build` — поднимутся PostgreSQL, сайт и [Caddy](https://caddyserver.com),
+   который сам получит и будет продлевать сертификат Let's Encrypt.
+5. Откройте `https://auth.example.com`, войдите админом, настройте почту в «Админка → Настройки»,
+   уберите `LUMORA_ADMIN_PASSWORD` из `.env`.
+
+Лаунчеру и игровому серверу нужен адрес `https://auth.example.com` (в лаунчере — «Настройки → Лаунчер»,
+для сервера — параметр `-AuthUrl` в `lumora-gameserver`).
+
+**Обновление:** `git pull && docker compose up -d --build` (миграции базы применяются сами).
+
+**Бэкапы:** `deploy/backup.sh` — дамп базы и папка данных (ключ подписи скинов, скины, файлы сборок) в
+`deploy/backups/`, хранит 14 последних. Поставьте в cron, например `0 4 * * * /opt/lumora-auth/deploy/backup.sh`,
+и копируйте бэкапы на другой сервер. Восстановление: `deploy/restore.sh <dump> <tar.gz>`.
+
+Сайт за своим прокси (nginx и т. п.): пробросьте заголовки `X-Forwarded-For/Proto/Host` и задайте
+`Lumora__BehindProxy=true`, иначе сайт не поймёт, что он за HTTPS.

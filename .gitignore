@@ -484,3 +484,6 @@ $RECYCLE.BIN/
 # Lumora runtime data (RSA key, textures, build files)
 data/
 .env
+
+# Production backups (deploy/backup.sh)
+deploy/backups/

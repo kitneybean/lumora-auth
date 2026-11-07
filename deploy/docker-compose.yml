@@ -1,0 +1,63 @@
+# Production: Lumora Auth + PostgreSQL behind Caddy with automatic HTTPS (Let's Encrypt).
+#   cd deploy && cp .env.example .env && nano .env
+#   docker compose up -d --build
+# Needs: a domain pointing at this server (A/AAAA record) and open ports 80 and 443.
+name: lumora
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lumora
+      POSTGRES_USER: lumora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumora -d lumora"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: ..
+      dockerfile: src/Lumora.Auth.Web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Lumora: Host=db;Port=5432;Database=lumora;Username=lumora;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable
+      Lumora__PublicUrl: https://${LUMORA_DOMAIN:?set LUMORA_DOMAIN in .env}
+      Lumora__BehindProxy: "true"
+      Lumora__DataPath: /data
+      Lumora__Admin__Email: ${LUMORA_ADMIN_EMAIL:-}
+      Lumora__Admin__Password: ${LUMORA_ADMIN_PASSWORD:-}
+    volumes:
+      - lumora-data:/data
+    # No published ports: only Caddy talks to the site. Health: https://<domain>/healthz
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      LUMORA_DOMAIN: ${LUMORA_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  lumora-data:
+  caddy-data:
+  caddy-config:

@@ -77,7 +77,24 @@ builder.Services.AddDataProtection()
     .SetApplicationName("Lumora.Auth")
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataRoot, "keys", "data-protection")));
 
+// Behind a reverse proxy (Caddy/nginx): trust X-Forwarded-* so the site knows the real scheme and client IP.
+if (lumoraSection.GetValue<bool>("BehindProxy"))
+{
+    builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+            | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+            | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost;
+        // The proxy runs in the same private Docker network; the app port is not published.
+        o.KnownIPNetworks.Clear();
+        o.KnownProxies.Clear();
+    });
+}
+
 var app = builder.Build();
+
+if (lumoraSection.GetValue<bool>("BehindProxy"))
+    app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {
