@@ -5,11 +5,14 @@ using Lumora.Auth.Core.Entities;
 using Lumora.Auth.Data;
 using Lumora.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Lumora.Auth.Web.Builds;
 
 /// <summary>Admin operations on builds and their files. Uses short-lived contexts (safe for Blazor Server).</summary>
-public sealed class BuildService(IDbContextFactory<LumoraDbContext> dbFactory, BuildFileStore store, TimeProvider time)
+public sealed class BuildService(
+    IDbContextFactory<LumoraDbContext> dbFactory, BuildFileStore store, TimeProvider time,
+    IHttpClientFactory httpFactory, Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
 {
     public sealed record BuildSummary(
         Guid Id, string Name, string MinecraftVersion, LoaderType Loader, string? LoaderVersion,
@@ -98,32 +101,182 @@ public sealed class BuildService(IDbContextFactory<LumoraDbContext> dbFactory, B
     /// <summary>Unpacks a zip into the build, keeping folder structure (optionally under <paramref name="folder"/>).</summary>
     public async Task<AddResult> AddZipAsync(Guid buildId, Stream zip, string? folder, CancellationToken ct = default)
     {
-        int added = 0, updated = 0;
+        var result = await ImportArchiveAsync(buildId, zip, folder, null, ct);
+        return new AddResult(result.Added, result.Updated, result.Skipped);
+    }
+
+    public sealed record ImportResult(int Added, int Updated, IReadOnlyList<string> Skipped, IReadOnlyList<string> Notes);
+
+    /// <summary>
+    /// Imports an archive: a Modrinth/Prism <c>.mrpack</c> (versions are taken from it, mods downloaded from Modrinth),
+    /// a CurseForge export (versions and overrides), or a plain ZIP of the game folder
+    /// (wrapping folders like <c>.minecraft/</c> or <c>overrides/</c> are stripped).
+    /// </summary>
+    public async Task<ImportResult> ImportArchiveAsync(Guid buildId, Stream zip, string? folder, IProgress<string>? progress, CancellationToken ct = default)
+    {
+        await using var archive = new ZipArchive(zip, ZipArchiveMode.Read);
+        var notes = new List<string>();
+        var files = new List<(ZipArchiveEntry Entry, string Path, FileSide? Side)>();
         var skipped = new List<string>();
+        int added = 0, updated = 0;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await using (var archive = new ZipArchive(zip, ZipArchiveMode.Read))
+
+        var entries = archive.Entries.Where(e => !e.FullName.EndsWith('/')).ToList();
+        if (MrpackIndex.Read(archive) is { } mrpack && folder is null)
         {
-            foreach (var entry in archive.Entries)
+            notes.Add(await ApplyVersionsAsync(db, buildId, mrpack.Name, mrpack.MinecraftVersion, mrpack.Loader, ct));
+            var downloaded = await DownloadMrpackFilesAsync(db, buildId, mrpack, progress, skipped, ct);
+            added += downloaded.Added;
+            updated += downloaded.Updated;
+            AddOverrides(entries, "overrides/", null, files);
+            AddOverrides(entries, "client-overrides/", FileSide.Client, files);
+            AddOverrides(entries, "server-overrides/", FileSide.Server, files);
+        }
+        else if (CurseForgeManifest.Read(archive) is { } curse && folder is null)
+        {
+            notes.Add(await ApplyVersionsAsync(db, buildId, curse.Name, curse.Minecraft.Version, curse.Loader, ct));
+            AddOverrides(entries, (curse.Overrides ?? "overrides").TrimEnd('/') + "/", null, files);
+            if (curse.Files is { Count: > 0 } mods)
+                notes.Add($"В экспорте CurseForge моды записаны только номерами ({mods.Count} шт.) — скачать их без ключа CurseForge нельзя. " +
+                          "Экспортируйте сборку из CurseForge как «.zip с модами» или из Prism/Modrinth как .mrpack, либо загрузите папку mods отдельно.");
+        }
+        else
+        {
+            var prefix = folder is null ? ZipLayout.DetectPrefix(entries.Select(e => e.FullName).ToList()) : "";
+            if (prefix.Length > 0)
+                notes.Add($"Папка «{prefix.TrimEnd('/')}» в архиве принята за папку игры.");
+            foreach (var entry in entries)
             {
-                if (entry.FullName.EndsWith('/') || entry.Length == 0 && entry.Name.Length == 0)
+                if (!entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     continue;
-                var raw = string.IsNullOrWhiteSpace(folder) ? entry.FullName : folder.Trim().TrimEnd('/') + "/" + entry.FullName;
-                var path = BuildPath.Normalize(raw);
-                if (path is null)
-                {
-                    skipped.Add(entry.FullName);
-                    continue;
-                }
-                await using var stream = await entry.OpenAsync(ct);
-                var (sha1, size) = await store.SaveAsync(stream, ct);
-                if (await UpsertAsync(db, buildId, path, sha1, size, ct))
-                    added++;
-                else
-                    updated++;
+                var relative = entry.FullName[prefix.Length..];
+                var raw = string.IsNullOrWhiteSpace(folder) ? relative : folder.Trim().TrimEnd('/') + "/" + relative;
+                files.Add((entry, raw, null));
             }
         }
+
+        var i = 0;
+        foreach (var (entry, raw, side) in files)
+        {
+            var path = BuildPath.Normalize(raw);
+            if (path is null)
+            {
+                skipped.Add(entry.FullName);
+                continue;
+            }
+            if (++i % 25 == 0)
+                progress?.Report($"Распаковываю файлы: {i} из {files.Count}…");
+            await using var stream = await entry.OpenAsync(ct);
+            var (sha1, size) = await store.SaveAsync(stream, ct);
+            if (await UpsertAsync(db, buildId, path, sha1, size, ct, side))
+                added++;
+            else
+                updated++;
+        }
         await TouchAsync(db, buildId, ct);
-        return new AddResult(added, updated, skipped);
+        return new ImportResult(added, updated, skipped, notes);
+    }
+
+    private static void AddOverrides(List<ZipArchiveEntry> entries, string prefix, FileSide? side, List<(ZipArchiveEntry, string, FileSide?)> target)
+    {
+        foreach (var e in entries.Where(e => e.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            target.Add((e, e.FullName[prefix.Length..], side));
+    }
+
+    private static async Task<string> ApplyVersionsAsync(LumoraDbContext db, Guid buildId, string? packName,
+        string? minecraft, (LoaderType Loader, string? Version) loader, CancellationToken ct)
+    {
+        var build = await db.Builds.FirstAsync(b => b.Id == buildId, ct);
+        if (minecraft is not null)
+            build.MinecraftVersion = minecraft;
+        build.Loader = loader.Loader;
+        build.LoaderVersion = loader.Version;
+        await db.SaveChangesAsync(ct);
+        return $"Сборка «{packName}»: Minecraft {build.MinecraftVersion}, {build.Loader} {build.LoaderVersion} — версии взяты из архива."
+               + (loader.Loader is LoaderType.Forge or LoaderType.Fabric ? " Внимание: лаунчер пока умеет ставить только NeoForge и Vanilla." : "");
+    }
+
+    private async Task<(int Added, int Updated)> DownloadMrpackFilesAsync(LumoraDbContext db, Guid buildId, MrpackIndex index,
+        IProgress<string>? progress, List<string> skipped, CancellationToken ct)
+    {
+        var http = httpFactory.CreateClient(nameof(BuildService));
+        using var gate = new SemaphoreSlim(6);
+        var done = 0;
+        var results = await Task.WhenAll(index.Files.Select(async file =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                if (file.SafeDownloadUrl is not { } url)
+                    return (file, (string?)null, 0L, $"{file.Path} (нет разрешённой ссылки на скачивание)");
+                await using var stream = await http.GetStreamAsync(url, ct);
+                var (sha1, size) = await store.SaveAsync(stream, ct);
+                if (file.Hashes.TryGetValue("sha1", out var expected) && !expected.Equals(sha1, StringComparison.OrdinalIgnoreCase))
+                    return (file, null, 0L, $"{file.Path} (контрольная сумма не совпала)");
+                progress?.Report($"Скачиваю моды с Modrinth: {Interlocked.Increment(ref done)} из {index.Files.Count}…");
+                return (file, sha1, size, (string?)null);
+            }
+            catch (HttpRequestException e)
+            {
+                return (file, null, 0L, $"{file.Path} ({e.Message})");
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }));
+
+        int added = 0, updated = 0;
+        foreach (var (file, sha1, size, error) in results)
+        {
+            var path = BuildPath.Normalize(file.Path);
+            if (error is not null || sha1 is null || path is null)
+            {
+                skipped.Add(error ?? file.Path);
+                continue;
+            }
+            var mode = file.OptionalOnClient ? FileInstallMode.OptionalOn : (FileInstallMode?)null;
+            if (await UpsertAsync(db, buildId, path, sha1, size, ct, file.Side, mode))
+                added++;
+            else
+                updated++;
+        }
+        return (added, updated);
+    }
+
+    public sealed record ModReport(IReadOnlyList<ModProblem> Problems, IReadOnlyDictionary<string, ModInfo> ModsBySha1, int JarCount);
+
+    /// <summary>Reads mod metadata of every jar in mods/ and reports duplicates and missing dependencies.</summary>
+    public async Task<ModReport> AnalyzeModsAsync(Guid buildId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var jars = await db.BuildFiles.AsNoTracking()
+            .Where(f => f.GameBuildId == buildId && f.Path.StartsWith("mods/") && f.Path.EndsWith(".jar") && f.Side != FileSide.Server)
+            .Select(f => new { f.Path, f.Sha1 })
+            .ToListAsync(ct);
+
+        var infos = new List<(string, JarInfo)>();
+        var bySha1 = new Dictionary<string, ModInfo>();
+        foreach (var jar in jars)
+        {
+            var info = await Task.Run(() => cache.GetOrCreate<JarInfo>("modinfo:" + jar.Sha1, entry =>
+            {
+                entry.SlidingExpiration = TimeSpan.FromHours(6);
+                try
+                {
+                    using var stream = File.OpenRead(store.PathOf(jar.Sha1));
+                    return ModMetadata.Read(stream);
+                }
+                catch (Exception e) when (e is IOException or InvalidDataException)
+                {
+                    return JarInfo.Empty;
+                }
+            })!, ct);
+            infos.Add((jar.Path, info));
+            if (info.Mods.Count > 0)
+                bySha1[jar.Sha1] = info.Mods[0];
+        }
+        return new ModReport(ModCheck.Analyze(infos), bySha1, jars.Count);
     }
 
     public async Task UpdateFileAsync(Guid fileId, FileSide side, FileInstallMode mode, string? displayName, CancellationToken ct = default)
@@ -183,7 +336,8 @@ public sealed class BuildService(IDbContextFactory<LumoraDbContext> dbFactory, B
         await db.SaveChangesAsync(ct);
     }
 
-    private static async Task<bool> UpsertAsync(LumoraDbContext db, Guid buildId, string path, string sha1, long size, CancellationToken ct)
+    private static async Task<bool> UpsertAsync(LumoraDbContext db, Guid buildId, string path, string sha1, long size, CancellationToken ct,
+        FileSide? side = null, FileInstallMode? mode = null)
     {
         var existing = await db.BuildFiles.FirstOrDefaultAsync(f => f.GameBuildId == buildId && f.Path == path, ct);
         if (existing is not null)
@@ -193,8 +347,12 @@ public sealed class BuildService(IDbContextFactory<LumoraDbContext> dbFactory, B
             await db.SaveChangesAsync(ct);
             return false;
         }
-        var (side, mode) = BuildPath.Defaults(path);
-        db.BuildFiles.Add(new BuildFile { GameBuildId = buildId, Path = path, Sha1 = sha1, Size = size, Side = side, Mode = mode });
+        var (defaultSide, defaultMode) = BuildPath.Defaults(path);
+        db.BuildFiles.Add(new BuildFile
+        {
+            GameBuildId = buildId, Path = path, Sha1 = sha1, Size = size,
+            Side = side ?? defaultSide, Mode = mode ?? defaultMode,
+        });
         await db.SaveChangesAsync(ct);
         return true;
     }

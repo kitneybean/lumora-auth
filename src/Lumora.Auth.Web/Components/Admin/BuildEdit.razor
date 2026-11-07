@@ -63,13 +63,15 @@
                             </datalist>
                         </div>
                         <div class="col-sm-8">
-                            <label class="form-label small mb-1">Файлы или ZIP-архив сборки</label>
+                            <label class="form-label small mb-1">Файлы, ZIP или .mrpack</label>
                             <InputFile class="form-control form-control-sm" multiple OnChange="UploadAsync" disabled="@busy" />
                         </div>
                     </div>
                     <div class="form-text">
-                        Обычные файлы кладутся в выбранную папку. <b>ZIP</b> распаковывается в корень сборки с сохранением папок
-                        (<code>mods/</code>, <code>config/</code> …) — удобно залить готовую сборку целиком. Файл с тем же путём заменяется.
+                        Обычные файлы кладутся в выбранную папку. <b>.mrpack</b> (экспорт Modrinth или Prism Launcher) — версии Minecraft и
+                        NeoForge берутся из него, моды скачиваются с Modrinth, конфиги — из архива. <b>ZIP</b> распаковывается с сохранением папок
+                        (<code>mods/</code>, <code>config/</code> …); обёртки вроде <code>.minecraft/</code> и <code>overrides/</code> убираются сами.
+                        Файл с тем же путём заменяется.
                     </div>
                     @if (uploadStatus is not null)
                     {
@@ -137,6 +139,32 @@
 
     <!-- Settings -->
     <div class="col-xxl-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-2">
+                    <h5 class="card-title mb-0">Проверка модов</h5>
+                    <button class="btn btn-sm btn-outline-primary ms-auto" @onclick="CheckModsAsync" disabled="@(checking || busy)">@(checking ? "Проверяю…" : "Проверить")</button>
+                </div>
+                @if (modReport is null)
+                {
+                    <p class="small text-body-secondary mb-0">Читает описания модов в <code>mods/</code>: ищет дубликаты и моды, которым не хватает обязательных зависимостей.</p>
+                }
+                else if (modReport.Problems.Count == 0)
+                {
+                    <p class="small text-success mb-0">Проблем не найдено: @modReport.JarCount jar, @modReport.ModsBySha1.Count с описанием мода.</p>
+                }
+                else
+                {
+                    <ul class="small mb-0 ps-3">
+                        @foreach (var p in modReport.Problems)
+                        {
+                            <li class="@(p.Kind == "duplicate" ? "text-danger" : "text-warning-emphasis") mb-1">@p.Message</li>
+                        }
+                    </ul>
+                }
+                <p class="small text-body-secondary mt-2 mb-0">Это проверка по описаниям модов. Окончательно совместимость видна только при запуске — логи игры и сервера пришлите разработчику.</p>
+            </div>
+        </div>
         <div class="card mb-4">
             <div class="card-body">
                 <h5 class="card-title">Параметры</h5>
@@ -269,6 +297,8 @@
     private IReadOnlyList<string> mcVersions = [];
     private IReadOnlyList<string> loaderVersions = [];
     private bool busy;
+    private BuildService.ModReport? modReport;
+    private bool checking;
     private bool confirmDelete;
     private string? message;
     private bool messageIsError;
@@ -339,11 +369,25 @@
         });
     }
 
+    private async Task CheckModsAsync()
+    {
+        checking = true;
+        try
+        {
+            modReport = await BuildsService.AnalyzeModsAsync(Id);
+        }
+        finally
+        {
+            checking = false;
+        }
+    }
+
     private async Task UploadAsync(InputFileChangeEventArgs e)
     {
         var list = e.GetMultipleFiles(500);
         int added = 0, updated = 0;
         var skipped = new List<string>();
+        var notes = new List<string>();
         await RunAsync(async () =>
         {
             for (var i = 0; i < list.Count; i++)
@@ -359,7 +403,7 @@
 
                 await using var browserStream = file.OpenReadStream(MaxFileSize);
                 BuildService.AddResult result;
-                if (file.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                if (file.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || file.Name.EndsWith(".mrpack", StringComparison.OrdinalIgnoreCase))
                 {
                     // ZipArchive needs a seekable stream: spool to a temp file first.
                     var tmp = Path.Combine(Path.GetTempPath(), "lumora-upload-" + Guid.NewGuid().ToString("N") + ".zip");
@@ -369,7 +413,10 @@
                         spool.Position = 0;
                         try
                         {
-                            result = await BuildsService.AddZipAsync(Id, spool, folder: null);
+                            var progress = new Progress<string>(text => { uploadStatus = text; InvokeAsync(StateHasChanged); });
+                            var imported = await BuildsService.ImportArchiveAsync(Id, spool, null, progress);
+                            notes.AddRange(imported.Notes);
+                            result = new BuildService.AddResult(imported.Added, imported.Updated, imported.Skipped);
                         }
                         catch (InvalidDataException)
                         {
@@ -392,9 +439,11 @@
                 updated += result.Updated;
                 skipped.AddRange(result.Skipped);
             }
-            await ReloadAsync(resetForm: false);
-            uploadStatus = $"Готово: добавлено {added}, заменено {updated}."
+            await ReloadAsync(resetForm: true);
+            uploadStatus = string.Join(" ", notes) + (notes.Count > 0 ? " " : "") + $"Готово: добавлено {added}, заменено {updated}."
                 + (skipped.Count > 0 ? $" Пропущено ({skipped.Count}): {string.Join(", ", skipped.Take(10))}{(skipped.Count > 10 ? "…" : "")}" : "");
+            if (files.Any(f => f.Path.StartsWith("mods/", StringComparison.Ordinal)))
+                modReport = await BuildsService.AnalyzeModsAsync(Id);
         });
     }
 

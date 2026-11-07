@@ -65,6 +65,11 @@ builder.Services.AddSingleton<Lumora.Auth.Web.Launcher.AuthlibInjectorProvider>(
 builder.Services.AddSingleton<Lumora.Auth.Web.Launcher.GameVersionsService>();
 builder.Services.AddHttpClient(nameof(Lumora.Auth.Web.Launcher.AuthlibInjectorProvider), c => c.Timeout = TimeSpan.FromMinutes(2));
 builder.Services.AddHttpClient(nameof(Lumora.Auth.Web.Launcher.GameVersionsService), c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient(nameof(Lumora.Auth.Web.Builds.BuildService), c =>
+{
+    c.Timeout = TimeSpan.FromMinutes(5);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("LumoraAuth/1.0 (modpack import)");
+});
 
 // Keep cookie keys across restarts and container rebuilds.
 var dataRoot = Path.GetFullPath(lumoraSection["DataPath"] ?? "data", builder.Environment.ContentRootPath);

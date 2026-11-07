@@ -118,6 +118,90 @@ public class LauncherApiTests(LumoraAppFactory app)
     }
 
     [Fact]
+    public async Task Mrpack_sets_versions_imports_overrides_and_skips_untrusted_downloads()
+    {
+        var buildId = await WithServices<BuildService, Guid>(b => b.CreateAsync("Mrpack", "1.20.1", LoaderType.Vanilla, null));
+        using var zip = new MemoryStream();
+        using (var archive = new ZipArchive(zip, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            Add(archive, "modrinth.index.json", """
+                {"formatVersion":1,"game":"minecraft","versionId":"1.0","name":"Test Pack",
+                 "files":[{"path":"mods/evil.jar","hashes":{"sha1":"00"},"env":{"client":"required","server":"required"},
+                           "downloads":["https://evil.example.com/evil.jar"],"fileSize":1}],
+                 "dependencies":{"minecraft":"1.21.1","neoforge":"21.1.77"}}
+                """);
+            Add(archive, "overrides/config/pack.toml", "both");
+            Add(archive, "client-overrides/options.txt", "client");
+            Add(archive, "server-overrides/config/server-only.toml", "server");
+        }
+        zip.Position = 0;
+
+        var result = await WithServices<BuildService, BuildService.ImportResult>(b => b.ImportArchiveAsync(buildId, zip, null, null));
+
+        Assert.Equal(3, result.Added);
+        Assert.Contains(result.Skipped, s => s.Contains("mods/evil.jar"));
+        Assert.Contains(result.Notes, n => n.Contains("Test Pack"));
+        var build = await WithServices<BuildService, GameBuild?>(b => b.GetAsync(buildId));
+        Assert.Equal(("1.21.1", LoaderType.NeoForge, "21.1.77"), (build!.MinecraftVersion, build.Loader, build.LoaderVersion));
+        Assert.Equal(FileSide.Client, build.Files.Single(f => f.Path == "options.txt").Side);
+        Assert.Equal(FileSide.Server, build.Files.Single(f => f.Path == "config/server-only.toml").Side);
+        Assert.Equal(FileSide.Both, build.Files.Single(f => f.Path == "config/pack.toml").Side);
+    }
+
+    /// <summary>Downloads a real mod from Modrinth. Runs only with LUMORA_NETWORK_TESTS=1.</summary>
+    [Fact]
+    public async Task Mrpack_downloads_mods_from_modrinth()
+    {
+        if (Environment.GetEnvironmentVariable("LUMORA_NETWORK_TESTS") != "1")
+            return;
+        var buildId = await WithServices<BuildService, Guid>(b => b.CreateAsync("Modrinth", "1.21.1", LoaderType.NeoForge, "21.1.77"));
+        using var zip = new MemoryStream();
+        using (var archive = new ZipArchive(zip, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            Add(archive, "modrinth.index.json", """
+                {"formatVersion":1,"game":"minecraft","versionId":"1","name":"Net",
+                 "files":[{"path":"mods/MouseTweaks.jar","hashes":{"sha1":"6dae57f4f50f7808d2ed9a18f6cd1c0d4640c6bc"},
+                           "env":{"client":"optional","server":"unsupported"},
+                           "downloads":["https://cdn.modrinth.com/data/aC3cM3Vq/versions/9I21YYxf/MouseTweaks-neoforge-mc1.21-2.26.1.jar"],"fileSize":73938}],
+                 "dependencies":{"minecraft":"1.21.1","neoforge":"21.1.77"}}
+                """);
+        }
+        zip.Position = 0;
+
+        var result = await WithServices<BuildService, BuildService.ImportResult>(b => b.ImportArchiveAsync(buildId, zip, null, null));
+
+        Assert.Empty(result.Skipped);
+        var file = (await WithServices<BuildService, GameBuild?>(b => b.GetAsync(buildId)))!.Files.Single();
+        Assert.Equal(("6dae57f4f50f7808d2ed9a18f6cd1c0d4640c6bc", FileSide.Client, FileInstallMode.OptionalOn), (file.Sha1, file.Side, file.Mode));
+        var report = await WithServices<BuildService, BuildService.ModReport>(b => b.AnalyzeModsAsync(buildId));
+        Assert.Equal("mousetweaks", report.ModsBySha1.Values.Single().ModId);
+    }
+
+    [Fact]
+    public async Task Zip_from_prism_export_strips_the_minecraft_folder_and_mods_are_checked()
+    {
+        var buildId = await WithServices<BuildService, Guid>(b => b.CreateAsync("Prism zip", "1.21.1", LoaderType.NeoForge, "21.1.77"));
+        using var zip = new MemoryStream();
+        using (var archive = new ZipArchive(zip, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            Add(archive, "instance.cfg", "x");
+            using (var e = archive.CreateEntry(".minecraft/mods/create.jar").Open())
+                ModCheckTests.Jar("[[mods]]\nmodId=\"create\"\n[[dependencies.create]]\nmodId=\"flywheel\"\ntype=\"required\"\n").CopyTo(e);
+            Add(archive, ".minecraft/config/create-client.toml", "cfg");
+        }
+        zip.Position = 0;
+
+        var result = await WithServices<BuildService, BuildService.ImportResult>(b => b.ImportArchiveAsync(buildId, zip, null, null));
+        Assert.Equal(2, result.Added);
+
+        var build = await WithServices<BuildService, GameBuild?>(b => b.GetAsync(buildId));
+        Assert.Equal(["config/create-client.toml", "mods/create.jar"], build!.Files.Select(f => f.Path).ToArray());
+
+        var report = await WithServices<BuildService, BuildService.ModReport>(b => b.AnalyzeModsAsync(buildId));
+        Assert.Contains(report.Problems, p => p.Kind == "missing" && p.Message.Contains("flywheel"));
+    }
+
+    [Fact]
     public async Task Server_icon_is_served_and_linked()
     {
         var client = await AuthorizedClientAsync("IconViewer");
