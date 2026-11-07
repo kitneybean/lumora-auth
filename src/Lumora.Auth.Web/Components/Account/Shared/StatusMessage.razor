@@ -1,8 +1,10 @@
-﻿@if (!string.IsNullOrEmpty(DisplayMessage))
+@if (!string.IsNullOrEmpty(DisplayMessage))
 {
-    var statusMessageClass = DisplayMessage.StartsWith("Error") ? "danger" : "success";
-    <div class="alert alert-@statusMessageClass" role="alert">
-        @DisplayMessage
+    // Messages starting with "Error" are errors; the prefix itself is not shown.
+    var isError = DisplayMessage.StartsWith("Error");
+    var text = isError ? DisplayMessage["Error".Length..].TrimStart(':', ' ') : DisplayMessage;
+    <div class="alert alert-@(isError ? "danger" : "success")" role="alert">
+        @text
     </div>
 }
 

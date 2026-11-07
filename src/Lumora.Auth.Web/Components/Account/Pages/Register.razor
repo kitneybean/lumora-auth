@@ -6,56 +6,58 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
 @using Lumora.Auth.Data
+@using Lumora.Auth.Web.Profiles
 
 @inject UserManager<ApplicationUser> UserManager
 @inject IUserStore<ApplicationUser> UserStore
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IEmailSender<ApplicationUser> EmailSender
+@inject ProfileService Profiles
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Register</PageTitle>
+<PageTitle>Регистрация — Lumora</PageTitle>
 
-<h1>Register</h1>
+<h1>Регистрация</h1>
 
 <div class="row">
     <div class="col-lg-6">
         <StatusMessage Message="@Message" />
         <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
             <DataAnnotationsValidator />
-            <h2>Create a new account.</h2>
+            <p class="text-body-secondary">Аккаунт нужен для входа в лаунчер. Ник — это имя персонажа в игре.</p>
             <hr />
             <ValidationSummary class="text-danger" role="alert" />
             <div class="form-floating mb-3">
+                <InputText @bind-Value="Input.PlayerName" id="Input.PlayerName" class="form-control" autocomplete="nickname" aria-required="true" placeholder="Steve" />
+                <label for="Input.PlayerName">Ник в игре</label>
+                <div class="form-text">@ProfileService.NameRules</div>
+                <ValidationMessage For="() => Input.PlayerName" class="text-danger" />
+            </div>
+            <div class="form-floating mb-3">
                 <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                <label for="Input.Email">Email</label>
+                <label for="Input.Email">E-mail</label>
                 <ValidationMessage For="() => Input.Email" class="text-danger" />
             </div>
             <div class="form-floating mb-3">
                 <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.Password">Password</label>
+                <label for="Input.Password">Пароль</label>
                 <ValidationMessage For="() => Input.Password" class="text-danger" />
             </div>
             <div class="form-floating mb-3">
                 <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.ConfirmPassword">Confirm Password</label>
+                <label for="Input.ConfirmPassword">Пароль ещё раз</label>
                 <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
             </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
+            <button type="submit" class="w-100 btn btn-lg btn-primary">Зарегистрироваться</button>
+            <p class="mt-3">Уже есть аккаунт? <a href="Account/Login">Войти</a></p>
         </EditForm>
-    </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Use another service to register.</h3>
-            <hr />
-            <ExternalLoginPicker />
-        </section>
     </div>
 </div>
 
 @code {
-    private IEnumerable<IdentityError>? identityErrors;
+    private string? errorMessage;
 
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = default!;
@@ -63,7 +65,7 @@
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
-    private string? Message => identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
+    private string? Message => errorMessage is null ? null : $"Error: {errorMessage}";
 
     protected override void OnInitialized()
     {
@@ -72,20 +74,31 @@
 
     public async Task RegisterUser(EditContext editContext)
     {
-        var user = CreateUser();
-
-        await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
-        var emailStore = GetEmailStore();
-        await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
-        var result = await UserManager.CreateAsync(user, Input.Password);
-
-        if (!result.Succeeded)
+        var playerName = Input.PlayerName.Trim();
+        if (await Profiles.ValidateNameAsync(playerName) is { } nameError)
         {
-            identityErrors = result.Errors;
+            errorMessage = nameError;
             return;
         }
 
-        Logger.LogInformation("User created a new account with password.");
+        var user = new ApplicationUser();
+        await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
+        await ((IUserEmailStore<ApplicationUser>)UserStore).SetEmailAsync(user, Input.Email, CancellationToken.None);
+        var result = await UserManager.CreateAsync(user, Input.Password);
+        if (!result.Succeeded)
+        {
+            errorMessage = string.Join(" ", result.Errors.Select(e => e.Description));
+            return;
+        }
+
+        if (await Profiles.CreateAsync(user.Id, playerName) is { } profileError)
+        {
+            await UserManager.DeleteAsync(user);
+            errorMessage = profileError;
+            return;
+        }
+
+        Logger.LogInformation("Registered {Email} as {Player}", Input.Email, playerName);
 
         var userId = await UserManager.GetUserIdAsync(user);
         var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
@@ -109,44 +122,23 @@
         }
     }
 
-    private ApplicationUser CreateUser()
-    {
-        try
-        {
-            return Activator.CreateInstance<ApplicationUser>();
-        }
-        catch
-        {
-            throw new InvalidOperationException($"Can't create an instance of '{nameof(ApplicationUser)}'. " +
-                $"Ensure that '{nameof(ApplicationUser)}' is not an abstract class and has a parameterless constructor.");
-        }
-    }
-
-    private IUserEmailStore<ApplicationUser> GetEmailStore()
-    {
-        if (!UserManager.SupportsUserEmail)
-        {
-            throw new NotSupportedException("The default UI requires a user store with email support.");
-        }
-        return (IUserEmailStore<ApplicationUser>)UserStore;
-    }
-
     private sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
-        [Display(Name = "Email")]
+        [Required(ErrorMessage = "Укажите ник.")]
+        [RegularExpression("^[A-Za-z0-9_]{3,16}$", ErrorMessage = "Ник: " + ProfileService.NameRules)]
+        public string PlayerName { get; set; } = "";
+
+        [Required(ErrorMessage = "Укажите e-mail.")]
+        [EmailAddress(ErrorMessage = "Некорректный e-mail.")]
         public string Email { get; set; } = "";
 
-        [Required]
-        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [Required(ErrorMessage = "Придумайте пароль.")]
+        [StringLength(100, ErrorMessage = "Пароль должен быть от {2} до {1} символов.", MinimumLength = 8)]
         [DataType(DataType.Password)]
-        [Display(Name = "Password")]
         public string Password { get; set; } = "";
 
         [DataType(DataType.Password)]
-        [Display(Name = "Confirm password")]
-        [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
+        [Compare("Password", ErrorMessage = "Пароли не совпадают.")]
         public string ConfirmPassword { get; set; } = "";
     }
 }

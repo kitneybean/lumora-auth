@@ -2,6 +2,8 @@ using Lumora.Auth.Data;
 using Lumora.Auth.Web;
 using Lumora.Auth.Web.Components;
 using Lumora.Auth.Web.Components.Account;
+using Lumora.Auth.Web.Yggdrasil;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -47,6 +49,14 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 builder.Services.AddHealthChecks().AddDbContextCheck<LumoraDbContext>();
+builder.Services.AddYggdrasil(builder.Configuration);
+builder.Services.AddScoped<Lumora.Auth.Web.Profiles.ProfileService>();
+
+// Keep cookie keys across restarts and container rebuilds.
+var dataRoot = Path.GetFullPath(lumoraSection["DataPath"] ?? "data", builder.Environment.ContentRootPath);
+builder.Services.AddDataProtection()
+    .SetApplicationName("Lumora.Auth")
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataRoot, "keys", "data-protection")));
 
 var app = builder.Build();
 
@@ -63,12 +73,19 @@ else
 if (!lumoraSection.GetValue<bool>(nameof(LumoraOptions.SkipDatabaseInit)))
     await DatabaseInitializer.InitializeAsync(app.Services);
 
+// Create or load the texture signing key now rather than on the first game login.
+_ = app.Services.GetRequiredService<Lumora.Auth.Core.Yggdrasil.SigningKey>();
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+app.UseYggdrasilApiLocation();
+app.UseRateLimiter();
 app.UseAntiforgery();
 
 app.MapHealthChecks("/healthz");
+app.MapYggdrasil();
+app.MapTextures();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

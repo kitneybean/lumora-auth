@@ -14,6 +14,15 @@ public sealed class LumoraOptions
     /// <summary>Folder for the RSA key, textures and build files.</summary>
     public string DataPath { get; set; } = "data";
 
+    /// <summary>How long a launcher access token can be used to play.</summary>
+    public TimeSpan TokenLifetime { get; set; } = TimeSpan.FromDays(15);
+
+    /// <summary>Extra time after expiry during which an expired token can still be refreshed.</summary>
+    public TimeSpan TokenRefreshWindow { get; set; } = TimeSpan.FromDays(30);
+
+    /// <summary>Older tokens of a user are revoked beyond this count.</summary>
+    public int MaxTokensPerUser { get; set; } = 10;
+
     /// <summary>Skip migrations/seeding on startup (tests, design-time tools).</summary>
     public bool SkipDatabaseInit { get; set; }
 

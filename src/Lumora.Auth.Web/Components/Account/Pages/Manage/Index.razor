@@ -2,40 +2,58 @@
 
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
+@using Lumora.Auth.Core.Entities
+@using Lumora.Auth.Core.Profiles
 @using Lumora.Auth.Data
+@using Lumora.Auth.Web.Profiles
 
 @inject UserManager<ApplicationUser> UserManager
-@inject SignInManager<ApplicationUser> SignInManager
+@inject ProfileService Profiles
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Profile</PageTitle>
+<PageTitle>Игровой профиль — Lumora</PageTitle>
 
-<h3>Profile</h3>
+<h3>Игровой профиль</h3>
 <StatusMessage />
 
 <div class="row">
-    <div class="col-xl-6">
+    <div class="col-xl-7">
+        @if (profile is not null)
+        {
+            <dl class="row mb-4">
+                <dt class="col-sm-4">Ник</dt>
+                <dd class="col-sm-8"><b>@profile.Name</b></dd>
+                <dt class="col-sm-4">UUID</dt>
+                <dd class="col-sm-8"><code>@MinecraftUuid.ToUnsigned(profile.Id)</code></dd>
+                <dt class="col-sm-4">Вход в лаунчер</dt>
+                <dd class="col-sm-8">по нику или e-mail <b>@email</b></dd>
+            </dl>
+        }
+        else
+        {
+            <div class="alert alert-warning">
+                У аккаунта ещё нет игрового профиля — без него нельзя зайти на сервер. Придумайте ник.
+            </div>
+        }
+
         <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
             <DataAnnotationsValidator />
             <ValidationSummary class="text-danger" role="alert" />
             <div class="form-floating mb-3">
-                <input type="text" value="@username" id="username" class="form-control" placeholder="Choose your username." disabled />
-                <label for="username" class="form-label">Username</label>
+                <InputText @bind-Value="Input.PlayerName" id="Input.PlayerName" class="form-control" placeholder="Steve" />
+                <label for="Input.PlayerName">@(profile is null ? "Ник" : "Новый ник")</label>
+                <div class="form-text">@ProfileService.NameRules UUID при смене ника не меняется.</div>
+                <ValidationMessage For="() => Input.PlayerName" class="text-danger" />
             </div>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" class="form-control" placeholder="Enter your phone number" />
-                <label for="Input.PhoneNumber" class="form-label">Phone number</label>
-                <ValidationMessage For="() => Input.PhoneNumber" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Save</button>
+            <button type="submit" class="w-100 btn btn-lg btn-primary">@(profile is null ? "Создать профиль" : "Сменить ник")</button>
         </EditForm>
     </div>
 </div>
 
 @code {
     private ApplicationUser? user;
-    private string? username;
-    private string? phoneNumber;
+    private PlayerProfile? profile;
+    private string? email;
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -54,10 +72,8 @@
             return;
         }
 
-        username = await UserManager.GetUserNameAsync(user);
-        phoneNumber = await UserManager.GetPhoneNumberAsync(user);
-
-        Input.PhoneNumber ??= phoneNumber;
+        email = user.Email;
+        profile = await Profiles.FindByUserAsync(user.Id);
     }
 
     private async Task OnValidSubmitAsync()
@@ -68,24 +84,20 @@
             return;
         }
 
-        if (Input.PhoneNumber != phoneNumber)
-        {
-            var setPhoneResult = await UserManager.SetPhoneNumberAsync(user, Input.PhoneNumber);
-            if (!setPhoneResult.Succeeded)
-            {
-                RedirectManager.RedirectToCurrentPageWithStatus("Error: Failed to set phone number.", HttpContext);
-                return;
-            }
-        }
+        var name = Input.PlayerName.Trim();
+        var error = profile is null
+            ? await Profiles.CreateAsync(user.Id, name)
+            : await Profiles.RenameAsync(user.Id, name);
 
-        await SignInManager.RefreshSignInAsync(user);
-        RedirectManager.RedirectToCurrentPageWithStatus("Your profile has been updated", HttpContext);
+        RedirectManager.RedirectToCurrentPageWithStatus(
+            error is null ? (profile is null ? "Профиль создан." : "Ник изменён.") : "Error: " + error,
+            HttpContext);
     }
 
     private sealed class InputModel
     {
-        [Phone]
-        [Display(Name = "Phone number")]
-        public string? PhoneNumber { get; set; }
+        [Required(ErrorMessage = "Укажите ник.")]
+        [RegularExpression("^[A-Za-z0-9_]{3,16}$", ErrorMessage = "Ник: " + ProfileService.NameRules)]
+        public string PlayerName { get; set; } = "";
     }
 }

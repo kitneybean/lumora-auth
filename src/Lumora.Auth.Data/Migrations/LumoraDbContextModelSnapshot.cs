@@ -185,7 +185,8 @@ namespace Lumora.Auth.Data.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                        .HasColumnType("character varying(16)")
+                        .UseCollation("und-ci");
 
                     b.Property<string>("SkinHash")
                         .HasMaxLength(64)
@@ -204,8 +205,6 @@ namespace Lumora.Auth.Data.Migrations
 
                     b.HasIndex("Name")
                         .IsUnique();
-
-                    NpgsqlIndexBuilderExtensions.UseCollation(b.HasIndex("Name"), new[] { "und-ci" });
 
                     b.HasIndex("UserId")
                         .IsUnique();

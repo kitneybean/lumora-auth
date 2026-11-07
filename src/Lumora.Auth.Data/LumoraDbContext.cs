@@ -23,9 +23,9 @@ public class LumoraDbContext(DbContextOptions<LumoraDbContext> options)
         builder.Entity<PlayerProfile>(e =>
         {
             e.HasKey(p => p.Id);
-            e.Property(p => p.Name).HasMaxLength(16);
-            // Names are case-insensitively unique, like Mojang's.
-            e.HasIndex(p => p.Name).IsUnique().UseCollation("und-ci");
+            // Case-insensitive collation: names compare and stay unique like Mojang's.
+            e.Property(p => p.Name).HasMaxLength(16).UseCollation("und-ci");
+            e.HasIndex(p => p.Name).IsUnique();
             e.HasIndex(p => p.UserId).IsUnique();
             e.Property(p => p.SkinModel).HasConversion<string>().HasMaxLength(16);
             e.Property(p => p.SkinHash).HasMaxLength(64);

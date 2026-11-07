@@ -44,3 +44,33 @@ docker compose up -d --build
 
 Сайт: http://localhost:8080 (в продакшене ставится за reverse proxy с HTTPS).
 Данные (RSA-ключ подписи, скины, файлы сборок) хранятся в volume `lumora-data`.
+
+## Yggdrasil API
+
+Адрес для authlib-injector: `<PublicUrl>/api/yggdrasil` (сайт также отдаёт заголовок
+`X-Authlib-Injector-API-Location`, так что подойдёт и просто адрес сайта).
+
+| Эндпоинт | Назначение |
+|---|---|
+| `GET /` | Метаданные: имя сервера, домены скинов, публичный ключ подписи |
+| `POST /authserver/authenticate`, `refresh`, `validate`, `invalidate`, `signout` | Токены лаунчера. Вход по e-mail **или нику** |
+| `POST /sessionserver/session/minecraft/join`, `GET .../hasJoined` | Проверка игрока при входе на сервер |
+| `GET /sessionserver/session/minecraft/profile/{uuid}` | Профиль со скином (`?unsigned=false` — с подписью) |
+| `POST /api/profiles/minecraft`, `GET /api/users/profiles/minecraft/{name}` | Поиск UUID по нику (без учёта регистра) |
+| `GET /minecraftservices/...` | Заглушки для клиентов 1.19+ (атрибуты игрока, блок-лист) |
+
+Скины отдаются с `/textures/{sha256}`. Свойство `textures` подписывается ключом RSA-4096 (SHA1withRSA),
+ключ создаётся при первом запуске в `<DataPath>/keys/yggdrasil-signing.pem` — его нужно сохранять при переездах,
+иначе игровые серверы перестанут принимать подписи до перезапуска.
+
+Настройки (`Lumora` в `appsettings.json`): `TokenLifetime` (15 дней), `TokenRefreshWindow` (+30 дней на обновление),
+`MaxTokensPerUser` (10), `AuthAttemptsPerMinute` (10 попыток входа в минуту с одного IP).
+Заблокированный игрок (`BanReason` + `LockoutEnd`) не может войти, а его токены перестают работать.
+
+## Тесты
+
+```bash
+dotnet test
+```
+
+Интеграционные тесты API поднимают временный PostgreSQL через Testcontainers — нужен запущенный Docker.
