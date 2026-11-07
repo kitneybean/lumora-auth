@@ -227,6 +227,72 @@ public class YggdrasilApiTests(LumoraAppFactory app) : IClassFixture<LumoraAppFa
         Assert.Equal(HttpStatusCode.NotFound, (await _http.GetAsync("/textures/" + new string('b', 64))).StatusCode);
     }
 
+    [Fact]
+    public async Task Skin_upload_with_token_updates_profile_textures()
+    {
+        await app.CreatePlayerAsync("Uploader");
+        var auth = await Authenticate("Uploader", "Password123");
+        var token = auth.GetProperty("accessToken").GetString();
+        var id = auth.GetProperty("selectedProfile").GetProperty("id").GetString();
+        var url = $"{Api}/api/user/profile/{id}/skin";
+
+        // No token.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _http.PutAsync(url, SkinForm(TestImages.Png(64, 64), "slim"))).StatusCode);
+
+        var put = new HttpRequestMessage(HttpMethod.Put, url) { Content = SkinForm(TestImages.Png(64, 64), "slim") };
+        put.Headers.Authorization = new("Bearer", token);
+        Assert.Equal(HttpStatusCode.NoContent, (await _http.SendAsync(put)).StatusCode);
+
+        var skin = await SkinOf(id!);
+        Assert.Equal("slim", skin!.Value.GetProperty("metadata").GetProperty("model").GetString());
+        var texturePath = new Uri(skin.Value.GetProperty("url").GetString()!).AbsolutePath;
+        var png = await _http.GetAsync(texturePath);
+        Assert.Equal(HttpStatusCode.OK, png.StatusCode);
+
+        // Wrong size is rejected with a readable message.
+        var bad = new HttpRequestMessage(HttpMethod.Put, url) { Content = SkinForm(TestImages.Png(32, 32), "") };
+        bad.Headers.Authorization = new("Bearer", token);
+        var badResponse = await _http.SendAsync(bad);
+        Assert.Equal(HttpStatusCode.BadRequest, badResponse.StatusCode);
+        Assert.Contains("64×64", (await Json(badResponse)).GetProperty("errorMessage").GetString());
+
+        var delete = new HttpRequestMessage(HttpMethod.Delete, url);
+        delete.Headers.Authorization = new("Bearer", token);
+        Assert.Equal(HttpStatusCode.NoContent, (await _http.SendAsync(delete)).StatusCode);
+        Assert.Null(await SkinOf(id!));
+    }
+
+    [Fact]
+    public async Task Skin_of_another_profile_cannot_be_changed()
+    {
+        await app.CreatePlayerAsync("Owner_A");
+        var other = await app.CreatePlayerAsync("Owner_B");
+        var token = (await Authenticate("Owner_A", "Password123")).GetProperty("accessToken").GetString();
+
+        var put = new HttpRequestMessage(HttpMethod.Put, $"{Api}/api/user/profile/{await FindProfileId(other.Id)}/skin")
+        {
+            Content = SkinForm(TestImages.Png(64, 64), ""),
+        };
+        put.Headers.Authorization = new("Bearer", token);
+        Assert.Equal(HttpStatusCode.Forbidden, (await _http.SendAsync(put)).StatusCode);
+    }
+
+    private static MultipartFormDataContent SkinForm(byte[] png, string model)
+    {
+        var file = new ByteArrayContent(png);
+        file.Headers.ContentType = new("image/png");
+        return new MultipartFormDataContent { { new StringContent(model), "model" }, { file, "file", "skin.png" } };
+    }
+
+    private async Task<JsonElement?> SkinOf(string profileId)
+    {
+        var profile = await Json(await _http.GetAsync($"{Api}/sessionserver/session/minecraft/profile/{profileId}"));
+        var value = profile.GetProperty("properties").EnumerateArray().Single(p => p.GetProperty("name").GetString() == "textures")
+            .GetProperty("value").GetString()!;
+        using var decoded = TexturesProperty.Decode(value);
+        return decoded.RootElement.GetProperty("textures").TryGetProperty("SKIN", out var skin) ? skin.Clone() : null;
+    }
+
     // ------------------------------------------------------------------
 
     private Task<HttpResponseMessage> Post(string path, object body) => _http.PostAsJsonAsync(Api + path, body);

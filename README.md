@@ -57,6 +57,7 @@ docker compose up -d --build
 | `POST /sessionserver/session/minecraft/join`, `GET .../hasJoined` | Проверка игрока при входе на сервер |
 | `GET /sessionserver/session/minecraft/profile/{uuid}` | Профиль со скином (`?unsigned=false` — с подписью) |
 | `POST /api/profiles/minecraft`, `GET /api/users/profiles/minecraft/{name}` | Поиск UUID по нику (без учёта регистра) |
+| `PUT`/`DELETE /api/user/profile/{uuid}/skin` | Загрузка и сброс скина из лаунчера (`Authorization: Bearer <accessToken>`, multipart: `file`, `model=slim`) |
 | `GET /minecraftservices/...` | Заглушки для клиентов 1.19+ (атрибуты игрока, блок-лист) |
 
 Скины отдаются с `/textures/{sha256}`. Свойство `textures` подписывается ключом RSA-4096 (SHA1withRSA),
@@ -74,3 +75,10 @@ dotnet test
 ```
 
 Интеграционные тесты API поднимают временный PostgreSQL через Testcontainers — нужен запущенный Docker.
+
+## Скины
+
+Игрок загружает скин на сайте («Мой аккаунт → Скин», с 3D-превью на [skinview3d](https://github.com/bs-community/skinview3d))
+или из лаунчера через API выше. Принимается PNG 64×64 или 64×32 до 256 КБ. Файл перекодируется
+(метаданные удаляются, у полностью прозрачных пикселей обнуляется цвет) и сохраняется как
+`<DataPath>/textures/<sha256>.png` — одинаковые скины хранятся один раз. Обработка изображений — SkiaSharp.

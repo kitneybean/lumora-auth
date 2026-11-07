@@ -1,6 +1,8 @@
 using Lumora.Auth.Core.Entities;
 using Lumora.Auth.Core.Profiles;
 using Lumora.Auth.Core.Yggdrasil;
+using Lumora.Auth.Core.Textures;
+using Lumora.Auth.Web.Textures;
 using Lumora.Auth.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -42,6 +44,10 @@ public static class YggdrasilEndpoints
 
         api.MapPost("/api/profiles/minecraft", LookupNames);
         api.MapGet("/api/users/profiles/minecraft/{name}", LookupName);
+
+        // Texture upload (Bearer access token), used by launchers.
+        api.MapPut("/api/user/profile/{uuid}/{textureType}", UploadTexture);
+        api.MapDelete("/api/user/profile/{uuid}/{textureType}", DeleteTexture);
 
         // Minimal Minecraft Services API used by 1.19+ clients.
         api.MapGet("/minecraftservices/player/attributes", PlayerAttributes);
@@ -219,6 +225,53 @@ public static class YggdrasilEndpoints
         profanityFilterPreferences = new { profanityFilterOn = false },
         banStatus = new { bannedScopes = new { } },
     });
+
+    // ---------------------------------------------------------------- textures
+
+    private static async Task<IResult> UploadTexture(
+        string uuid, string textureType, HttpRequest request, TokenService tokens, SkinService skins, CancellationToken ct)
+    {
+        var profileId = await AuthorizeProfileAsync(uuid, textureType, request, tokens, ct);
+        if (!request.HasFormContentType)
+            throw YggdrasilException.IllegalArgument("Expected multipart/form-data.");
+
+        var form = await request.ReadFormAsync(ct);
+        if (form.Files.GetFile("file") is not { } file)
+            throw YggdrasilException.IllegalArgument("Missing file.");
+        if (file.Length > TextureImages.MaxUploadBytes)
+            throw YggdrasilException.IllegalArgument("Файл слишком большой.");
+
+        using var buffer = new MemoryStream();
+        await file.CopyToAsync(buffer, ct);
+        var model = form["model"].ToString() == "slim" ? SkinModel.Slim : SkinModel.Classic;
+        if (await skins.SetSkinAsync(profileId, buffer.ToArray(), model, ct) is { } error)
+            throw YggdrasilException.IllegalArgument(error);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> DeleteTexture(
+        string uuid, string textureType, HttpRequest request, TokenService tokens, SkinService skins, CancellationToken ct)
+    {
+        var profileId = await AuthorizeProfileAsync(uuid, textureType, request, tokens, ct);
+        await skins.ResetSkinAsync(profileId, ct);
+        return Results.NoContent();
+    }
+
+    /// <summary>Checks the Bearer token owns the profile; only skins can be changed by players.</summary>
+    private static async Task<Guid> AuthorizeProfileAsync(
+        string uuid, string textureType, HttpRequest request, TokenService tokens, CancellationToken ct)
+    {
+        var header = request.Headers.Authorization.ToString();
+        var accessToken = header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header[7..].Trim() : null;
+        var token = await tokens.FindUsableAsync(accessToken, null, ct)
+            ?? throw new YggdrasilException(StatusCodes.Status401Unauthorized, "UnauthorizedOperationException", "Invalid token.");
+
+        if (!MinecraftUuid.TryParse(uuid, out var profileId) || token.ProfileId != profileId)
+            throw YggdrasilException.Forbidden("Profile does not belong to this token.");
+        if (textureType != "skin")
+            throw YggdrasilException.Forbidden("Only skins can be changed.");
+        return profileId;
+    }
 
     // ---------------------------------------------------------------- helpers
 

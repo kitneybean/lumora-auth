@@ -1,0 +1,152 @@
+@page "/Account/Manage/Skin"
+
+@using Microsoft.AspNetCore.Identity
+@using Lumora.Auth.Core.Entities
+@using Lumora.Auth.Data
+@using Lumora.Auth.Web.Profiles
+@using Lumora.Auth.Web.Textures
+
+@inject UserManager<ApplicationUser> UserManager
+@inject ProfileService Profiles
+@inject SkinService Skins
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Скин — Lumora</PageTitle>
+
+<h3>Скин</h3>
+<StatusMessage />
+
+@if (profile is null)
+{
+    <div class="alert alert-warning">
+        Сначала создайте <a href="Account/Manage">игровой профиль</a> — скин привязывается к нику.
+    </div>
+}
+else
+{
+    <div class="row g-4">
+        <div class="col-md-5">
+            <div class="skin-box" data-skin-box>
+                <canvas id="skin-canvas" data-skin-viewer
+                        data-skin-url="@(profile.SkinHash is null ? "" : $"textures/{profile.SkinHash}")"
+                        data-skin-model="@(profile.SkinModel == SkinModel.Slim ? "slim" : "default")"></canvas>
+                @if (profile.SkinHash is null)
+                {
+                    <div class="skin-box-note">Сейчас стандартный скин.<br />Загрузите свой, чтобы его видели все.</div>
+                }
+                <div class="skin-box-fallback">
+                    @if (profile.SkinHash is not null)
+                    {
+                        <img src="textures/@profile.SkinHash" alt="Развёртка скина" class="skin-flat" />
+                    }
+                    <div class="small text-body-secondary">3D-превью не загрузилось — показана развёртка.</div>
+                </div>
+            </div>
+            <p class="small text-body-secondary mt-2 mb-0">Перетащите мышью, чтобы повернуть персонажа.</p>
+        </div>
+
+        <div class="col-md-7">
+            <form method="post" enctype="multipart/form-data" @formname="upload" @onsubmit="UploadAsync" class="mb-4">
+                <AntiforgeryToken />
+                <h5>Загрузить скин</h5>
+                <div class="mb-3">
+                    <input class="form-control" type="file" name="file" accept="image/png,.png" required data-skin-file="#skin-canvas" />
+                    <div class="form-text">PNG 64×64 (или старый формат 64×32), до 256 КБ. Готовые скины можно найти на сайтах со скинами для Minecraft.</div>
+                </div>
+                <div class="mb-3">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="model" id="model-classic" value="classic" checked="@(profile.SkinModel == SkinModel.Classic)" data-skin-model-for="#skin-canvas" />
+                        <label class="form-check-label" for="model-classic">Классическая модель (руки 4 px)</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="model" id="model-slim" value="slim" checked="@(profile.SkinModel == SkinModel.Slim)" data-skin-model-for="#skin-canvas" />
+                        <label class="form-check-label" for="model-slim">Тонкая модель (руки 3 px)</label>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Загрузить</button>
+            </form>
+
+            @if (profile.SkinHash is not null)
+            {
+                <hr />
+                <div class="d-flex flex-wrap gap-2">
+                    <form method="post" @formname="model" @onsubmit="ToggleModelAsync">
+                        <AntiforgeryToken />
+                        <button type="submit" class="btn btn-outline-secondary">
+                            @(profile.SkinModel == SkinModel.Slim ? "Сделать классическую модель" : "Сделать тонкую модель")
+                        </button>
+                    </form>
+                    <form method="post" @formname="reset" @onsubmit="ResetAsync">
+                        <AntiforgeryToken />
+                        <button type="submit" class="btn btn-outline-danger">Вернуть стандартный скин</button>
+                    </form>
+                </div>
+            }
+            <p class="small text-body-secondary mt-4 mb-0">
+                Новый скин появится в игре при следующем входе на сервер. Другие игроки увидят его после перезахода.
+            </p>
+        </div>
+    </div>
+}
+
+@code {
+    private ApplicationUser? user;
+    private PlayerProfile? profile;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await UserManager.GetUserAsync(HttpContext.User);
+        if (user is null)
+        {
+            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            return;
+        }
+        profile = await Profiles.FindByUserAsync(user.Id);
+    }
+
+    private async Task UploadAsync()
+    {
+        if (profile is null)
+            return;
+
+        var form = await HttpContext.Request.ReadFormAsync();
+        var file = form.Files.GetFile("file");
+        if (file is null || file.Length == 0)
+        {
+            RedirectManager.RedirectToCurrentPageWithStatus("Error: Выберите файл скина.", HttpContext);
+            return;
+        }
+        if (file.Length > Lumora.Auth.Core.Textures.TextureImages.MaxUploadBytes)
+        {
+            RedirectManager.RedirectToCurrentPageWithStatus("Error: Файл слишком большой (больше 256 КБ).", HttpContext);
+            return;
+        }
+
+        using var buffer = new MemoryStream();
+        await file.CopyToAsync(buffer);
+        var model = form["model"].ToString() == "slim" ? SkinModel.Slim : SkinModel.Classic;
+        var error = await Skins.SetSkinAsync(profile.Id, buffer.ToArray(), model);
+        RedirectManager.RedirectToCurrentPageWithStatus(error is null ? "Скин обновлён." : "Error: " + error, HttpContext);
+    }
+
+    private async Task ToggleModelAsync()
+    {
+        if (profile is null)
+            return;
+        var model = profile.SkinModel == SkinModel.Slim ? SkinModel.Classic : SkinModel.Slim;
+        await Skins.SetModelAsync(profile.Id, model);
+        RedirectManager.RedirectToCurrentPageWithStatus(
+            model == SkinModel.Slim ? "Теперь тонкая модель." : "Теперь классическая модель.", HttpContext);
+    }
+
+    private async Task ResetAsync()
+    {
+        if (profile is null)
+            return;
+        await Skins.ResetSkinAsync(profile.Id);
+        RedirectManager.RedirectToCurrentPageWithStatus("Скин сброшен на стандартный.", HttpContext);
+    }
+}

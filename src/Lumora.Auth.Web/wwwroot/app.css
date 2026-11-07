@@ -58,3 +58,55 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+/* --- Skin page --- */
+.skin-box {
+    position: relative;
+    height: 420px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 35%, #2a3550 0%, #121826 70%);
+}
+
+.skin-box canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+.skin-box-note {
+    position: absolute;
+    inset: auto 0 18px 0;
+    text-align: center;
+    color: #c9d2e3;
+    font-size: .9rem;
+    pointer-events: none;
+}
+
+.skin-box.has-preview .skin-box-note {
+    display: none;
+}
+
+.skin-box-fallback {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    color: #c9d2e3;
+}
+
+.skin-box.no-3d canvas {
+    display: none;
+}
+
+.skin-box.no-3d .skin-box-fallback {
+    display: flex;
+}
+
+.skin-flat {
+    width: 256px;
+    image-rendering: pixelated;
+}

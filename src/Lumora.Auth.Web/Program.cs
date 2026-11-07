@@ -51,6 +51,7 @@ builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSe
 builder.Services.AddHealthChecks().AddDbContextCheck<LumoraDbContext>();
 builder.Services.AddYggdrasil(builder.Configuration);
 builder.Services.AddScoped<Lumora.Auth.Web.Profiles.ProfileService>();
+builder.Services.AddScoped<Lumora.Auth.Web.Textures.SkinService>();
 
 // Keep cookie keys across restarts and container rebuilds.
 var dataRoot = Path.GetFullPath(lumoraSection["DataPath"] ?? "data", builder.Environment.ContentRootPath);
