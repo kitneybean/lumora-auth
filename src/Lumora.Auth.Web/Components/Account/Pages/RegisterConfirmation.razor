@@ -1,35 +1,24 @@
 ﻿@page "/Account/RegisterConfirmation"
 
-@using System.Text
 @using Microsoft.AspNetCore.Identity
-@using Microsoft.AspNetCore.WebUtilities
 @using Lumora.Auth.Data
 
 @inject UserManager<ApplicationUser> UserManager
-@inject IEmailSender<ApplicationUser> EmailSender
-@inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Register confirmation</PageTitle>
+<PageTitle>Подтвердите e-mail — Lumora</PageTitle>
 
-<h1>Register confirmation</h1>
+<h1>Почти готово</h1>
 
 <StatusMessage Message="@statusMessage" />
 
-@if (emailConfirmationLink is not null)
+@if (statusMessage is null)
 {
-    <p>
-        This app does not currently have a real email sender registered, see <a href="https://aka.ms/aspaccountconf">these docs</a> for how to configure a real email sender.
-        Normally this would be emailed: <a href="@emailConfirmationLink">Click here to confirm your account</a>
-    </p>
-}
-else
-{
-    <p role="alert">Please check your email to confirm your account.</p>
+    <p>Мы отправили письмо на <b>@Email</b>. Откройте ссылку из письма, чтобы подтвердить почту, — после этого можно входить на сайт и в лаунчер.</p>
+    <p class="text-body-secondary">Письма нет? Проверьте «Спам» или <a href="Account/ResendEmailConfirmation">отправьте ещё раз</a>.</p>
 }
 
 @code {
-    private string? emailConfirmationLink;
     private string? statusMessage;
 
     [CascadingParameter]
@@ -37,9 +26,6 @@ else
 
     [SupplyParameterFromQuery]
     private string? Email { get; set; }
-
-    [SupplyParameterFromQuery]
-    private string? ReturnUrl { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -49,21 +35,10 @@ else
             return;
         }
 
-        var user = await UserManager.FindByEmailAsync(Email);
-        if (user is null)
+        if (await UserManager.FindByEmailAsync(Email) is null)
         {
             HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-            statusMessage = "Error finding user for unspecified email";
-        }
-        else if (EmailSender is IdentityNoOpEmailSender)
-        {
-            // Once you add a real email sender, you should remove this code that lets you confirm the account
-            var userId = await UserManager.GetUserIdAsync(user);
-            var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
-            code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-            emailConfirmationLink = NavigationManager.GetUriWithQueryParameters(
-                NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
-                new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code, ["returnUrl"] = ReturnUrl });
+            statusMessage = "Error: Аккаунт с таким e-mail не найден.";
         }
     }
 }

@@ -13,6 +13,7 @@ public class LumoraDbContext(DbContextOptions<LumoraDbContext> options)
     public DbSet<GameBuild> Builds => Set<GameBuild>();
     public DbSet<BuildFile> BuildFiles => Set<BuildFile>();
     public DbSet<GameServer> Servers => Set<GameServer>();
+    public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -78,6 +79,18 @@ public class LumoraDbContext(DbContextOptions<LumoraDbContext> options)
             e.Property(f => f.Side).HasConversion<string>().HasMaxLength(16);
             e.Property(f => f.Mode).HasConversion<string>().HasMaxLength(16);
             e.HasIndex(f => new { f.GameBuildId, f.Path }).IsUnique();
+        });
+
+        builder.Entity<SiteSettings>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).ValueGeneratedNever();
+            e.Property(s => s.ServerName).HasMaxLength(64);
+            e.Property(s => s.SmtpHost).HasMaxLength(255);
+            e.Property(s => s.SmtpUsername).HasMaxLength(255);
+            e.Property(s => s.MailFromAddress).HasMaxLength(255);
+            e.Property(s => s.MailFromName).HasMaxLength(128);
+            e.Property(s => s.SmtpSecurity).HasConversion<string>().HasMaxLength(16);
         });
 
         builder.Entity<GameServer>(e =>

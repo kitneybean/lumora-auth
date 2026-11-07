@@ -8,9 +8,9 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Confirm email</PageTitle>
+<PageTitle>Подтверждение e-mail — Lumora</PageTitle>
 
-<h1>Confirm email</h1>
+<h1>Подтверждение e-mail</h1>
 <StatusMessage Message="@statusMessage" />
 
 @code {
@@ -37,13 +37,13 @@
         if (user is null)
         {
             HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-            statusMessage = $"Error loading user with ID {UserId}";
+            statusMessage = "Error: Аккаунт не найден.";
         }
         else
         {
             var code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(Code));
             var result = await UserManager.ConfirmEmailAsync(user, code);
-            statusMessage = result.Succeeded ? "Thank you for confirming your email." : "Error confirming your email.";
+            statusMessage = result.Succeeded ? "Почта подтверждена — можно входить на сайт и в лаунчер." : "Error: Ссылка устарела или неверна. Запросите письмо ещё раз.";
         }
     }
 }

@@ -11,7 +11,7 @@ namespace Lumora.Auth.Web.Yggdrasil;
 /// A token can be used until <see cref="YggdrasilToken.ExpiresAt"/> and refreshed for
 /// <see cref="LumoraOptions.TokenRefreshWindow"/> after that. Tokens of banned users are unusable.
 /// </summary>
-public sealed class TokenService(LumoraDbContext db, IOptions<LumoraOptions> options, TimeProvider time)
+public sealed class TokenService(LumoraDbContext db, IOptions<LumoraOptions> options, Settings.SiteSettingsService site, TimeProvider time)
 {
     private LumoraOptions Options => options.Value;
 
@@ -25,7 +25,7 @@ public sealed class TokenService(LumoraDbContext db, IOptions<LumoraOptions> opt
         var dead = tokens.Where(t => t.IsRevoked || t.ExpiresAt < refreshDeadline).ToList();
         db.Tokens.RemoveRange(dead);
         var live = tokens.Except(dead).ToList();
-        foreach (var old in live.Take(Math.Max(0, live.Count - Options.MaxTokensPerUser + 1)))
+        foreach (var old in live.Take(Math.Max(0, live.Count - site.Current.MaxTokensPerUser + 1)))
             db.Tokens.Remove(old);
 
         var token = new YggdrasilToken
@@ -35,7 +35,7 @@ public sealed class TokenService(LumoraDbContext db, IOptions<LumoraOptions> opt
             UserId = userId,
             ProfileId = profileId,
             IssuedAt = now,
-            ExpiresAt = now + Options.TokenLifetime,
+            ExpiresAt = now + TimeSpan.FromDays(site.Current.TokenLifetimeDays),
         };
         db.Tokens.Add(token);
         await db.SaveChangesAsync(ct);

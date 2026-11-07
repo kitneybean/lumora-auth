@@ -58,13 +58,13 @@ public static class YggdrasilEndpoints
 
     // ---------------------------------------------------------------- metadata
 
-    private static IResult Metadata(IOptions<LumoraOptions> options, SigningKey key)
+    private static IResult Metadata(IOptions<LumoraOptions> options, Settings.SiteSettingsService site, SigningKey key)
     {
         var o = options.Value;
         var publicUrl = o.PublicUrl.TrimEnd('/');
         var meta = new Dictionary<string, object?>
         {
-            ["serverName"] = o.ServerName,
+            ["serverName"] = site.Current.ServerName,
             ["implementationName"] = "Lumora Auth",
             ["implementationVersion"] = typeof(YggdrasilEndpoints).Assembly.GetName().Version?.ToString(3),
             ["links"] = new { homepage = publicUrl + "/", register = publicUrl + "/Account/Register" },
@@ -300,6 +300,8 @@ public static class YggdrasilEndpoints
         var result = await signIn.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
         if (result.IsLockedOut)
             throw YggdrasilException.Forbidden("Слишком много неудачных попыток входа. Попробуйте через несколько минут.");
+        if (result.IsNotAllowed)
+            throw YggdrasilException.Forbidden("Подтвердите e-mail: ссылка пришла в письме после регистрации.");
         if (!result.Succeeded)
             throw YggdrasilException.InvalidCredentials();
         return user;

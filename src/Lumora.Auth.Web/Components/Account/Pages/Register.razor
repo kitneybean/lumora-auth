@@ -13,6 +13,7 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IEmailSender<ApplicationUser> EmailSender
 @inject ProfileService Profiles
+@inject Lumora.Auth.Web.Settings.SiteSettingsService Site
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
@@ -20,6 +21,12 @@
 <PageTitle>Регистрация — Lumora</PageTitle>
 
 <h1>Регистрация</h1>
+
+@if (!Site.Current.RegistrationOpen)
+{
+    <div class="alert alert-warning">Регистрация сейчас закрыта. Если у вас уже есть аккаунт — <a href="Account/Login">войдите</a>.</div>
+    return;
+}
 
 <div class="row">
     <div class="col-lg-6">
@@ -74,6 +81,8 @@
 
     public async Task RegisterUser(EditContext editContext)
     {
+        if (!Site.Current.RegistrationOpen)
+            return;
         var playerName = Input.PlayerName.Trim();
         if (await Profiles.ValidateNameAsync(playerName) is { } nameError)
         {

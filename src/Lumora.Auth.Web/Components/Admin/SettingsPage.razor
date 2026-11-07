@@ -1,0 +1,244 @@
+@page "/admin/settings"
+@rendermode InteractiveServer
+@using Lumora.Auth.Web.Settings
+@inject SiteSettingsService Site
+@inject SmtpEmailSender Mail
+@inject Microsoft.Extensions.Options.IOptions<LumoraOptions> Options
+
+<PageTitle>Настройки — Lumora</PageTitle>
+
+<AdminNav />
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success") py-2">@message</div>
+}
+
+<div class="row g-4">
+    <div class="col-xl-5">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Сайт</h5>
+                <div class="mb-3">
+                    <label class="form-label">Название проекта</label>
+                    <input class="form-control" @bind="s.ServerName" maxlength="64" />
+                    <div class="form-text">Показывается на сайте, в письмах и в лаунчерах (authlib-injector).</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Публичный адрес</label>
+                    <input class="form-control" value="@Options.Value.PublicUrl" disabled />
+                    <div class="form-text">Задаётся при развёртывании (<code>Lumora__PublicUrl</code>): от него зависят ссылки на скины и файлы.</div>
+                </div>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="reg-open" @bind="s.RegistrationOpen" />
+                    <label class="form-check-label" for="reg-open">Регистрация открыта</label>
+                </div>
+                <div class="form-check form-switch mb-1">
+                    <input class="form-check-input" type="checkbox" id="confirm" @bind="s.RequireConfirmedEmail" />
+                    <label class="form-check-label" for="confirm">Подтверждать e-mail при регистрации</label>
+                </div>
+                @if (s.RequireConfirmedEmail && !Site.MailConfigured(s))
+                {
+                    <div class="form-text text-warning-emphasis mb-2">Включится, когда заработает почта — без неё игроки не получат письмо.</div>
+                }
+                <hr />
+                <h6>Сессии лаунчера</h6>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small">Срок входа, дней</label>
+                        <input class="form-control" type="number" min="1" max="365" @bind="s.TokenLifetimeDays" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small">Устройств на аккаунт</label>
+                        <input class="form-control" type="number" min="1" max="100" @bind="s.MaxTokensPerUser" />
+                    </div>
+                </div>
+                <div class="form-text">После срока лаунчер ещё месяц может продлить вход сам; дальше игрок вводит пароль заново.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-7">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-2">
+                    <h5 class="card-title mb-0">Почта</h5>
+                    <span class="ms-2 badge @(Site.MailConfigured(Site.Current) ? "text-bg-success" : "text-bg-secondary")">
+                        @(Site.MailConfigured(Site.Current) ? "работает" : "не настроена")
+                    </span>
+                </div>
+                <p class="small text-body-secondary">
+                    Нужна для подтверждения e-mail и «Забыли пароль?». Свой почтовый сервер не обязателен — подойдёт обычный
+                    ящик на Яндексе, Mail.ru или Gmail (с «паролем приложения») либо бесплатный сервис рассылок.
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label small mb-1">Быстрая настройка</label>
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var p in Presets)
+                        {
+                            <button type="button" class="btn btn-sm @(preset == p ? "btn-primary" : "btn-outline-secondary")" @onclick="() => ApplyPreset(p)">@p.Name</button>
+                        }
+                    </div>
+                    @if (preset is not null)
+                    {
+                        <div class="alert alert-info small mt-2 mb-0">@((MarkupString)preset.Hint)</div>
+                    }
+                </div>
+
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="smtp-on" @bind="s.SmtpEnabled" />
+                    <label class="form-check-label" for="smtp-on">Отправлять письма</label>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-sm-6">
+                        <label class="form-label small">SMTP-сервер</label>
+                        <input class="form-control" @bind="s.SmtpHost" placeholder="smtp.yandex.ru" />
+                    </div>
+                    <div class="col-sm-2">
+                        <label class="form-label small">Порт</label>
+                        <input class="form-control" type="number" @bind="s.SmtpPort" />
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small">Шифрование</label>
+                        <select class="form-select" @bind="s.SmtpSecurity">
+                            <option value="@SmtpSecurity.SslOnConnect">SSL/TLS (465)</option>
+                            <option value="@SmtpSecurity.StartTls">STARTTLS (587)</option>
+                            <option value="@SmtpSecurity.None">Без шифрования</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-sm-6">
+                        <label class="form-label small">Логин</label>
+                        <input class="form-control" @bind="s.SmtpUsername" autocomplete="off" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label small">Пароль @(hasPassword ? "(сохранён)" : "")</label>
+                        <input class="form-control" type="password" @bind="newPassword" autocomplete="new-password"
+                               placeholder="@(hasPassword ? "оставьте пустым, чтобы не менять" : "пароль приложения или API-ключ")" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label small">Адрес отправителя</label>
+                        <input class="form-control" @bind="s.MailFromAddress" placeholder="noreply@example.com" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label small">Имя отправителя</label>
+                        <input class="form-control" @bind="s.MailFromName" placeholder="@s.ServerName" />
+                    </div>
+                </div>
+                <div class="form-text mb-3">Пароль хранится в базе в зашифрованном виде. У Яндекса и Mail.ru адрес отправителя должен совпадать с логином.</div>
+
+                <div class="input-group">
+                    <input class="form-control" type="email" @bind="testTo" placeholder="куда отправить тестовое письмо" />
+                    <button class="btn btn-outline-primary" @onclick="TestAsync" disabled="@(busy || string.IsNullOrWhiteSpace(testTo))">
+                        @(busy ? "Отправляю…" : "Отправить тест")
+                    </button>
+                </div>
+                <div class="form-text">Тест использует то, что сейчас в форме, даже если не сохранено.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <button class="btn btn-primary btn-lg" @onclick="SaveAsync" disabled="@busy">Сохранить настройки</button>
+</div>
+
+@code {
+    private sealed record Preset(string Name, string Host, int Port, SmtpSecurity Security, string? User, string Hint);
+
+    private static readonly Preset[] Presets =
+    [
+        new("Яндекс", "smtp.yandex.ru", 465, SmtpSecurity.SslOnConnect, null,
+            "Логин — полный адрес ящика. Пароль — <b>пароль приложения</b>: Яндекс ID → Безопасность → Пароли приложений → «Почта»."),
+        new("Mail.ru", "smtp.mail.ru", 465, SmtpSecurity.SslOnConnect, null,
+            "Логин — полный адрес ящика. Пароль — <b>пароль для внешнего приложения</b>: Настройки → Безопасность → Пароли для внешних приложений."),
+        new("Gmail", "smtp.gmail.com", 587, SmtpSecurity.StartTls, null,
+            "Нужна двухэтапная проверка в Google-аккаунте, затем <b>пароль приложения</b>: myaccount.google.com/apppasswords. Лимит ~500 писем в день."),
+        new("Brevo", "smtp-relay.brevo.com", 587, SmtpSecurity.StartTls, null,
+            "Бесплатно до 300 писем в день. Логин и SMTP-ключ — в разделе SMTP & API. Адрес отправителя нужно подтвердить в Brevo."),
+        new("Resend", "smtp.resend.com", 465, SmtpSecurity.SslOnConnect, "resend",
+            "Логин <code>resend</code>, пароль — API-ключ. Нужен свой домен, подтверждённый в Resend."),
+        new("SendGrid", "smtp.sendgrid.net", 587, SmtpSecurity.StartTls, "apikey",
+            "Логин <code>apikey</code>, пароль — API-ключ SendGrid. Адрес отправителя подтверждается в SendGrid."),
+    ];
+
+    private SiteSettings s = new();
+    private Preset? preset;
+    private string? newPassword;
+    private bool hasPassword;
+    private string? testTo;
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
+
+    protected override void OnInitialized() => Load();
+
+    private void Load()
+    {
+        s = Site.Current;
+        hasPassword = s.SmtpPasswordProtected is not null;
+        newPassword = null;
+    }
+
+    private void ApplyPreset(Preset p)
+    {
+        preset = p;
+        s.SmtpHost = p.Host;
+        s.SmtpPort = p.Port;
+        s.SmtpSecurity = p.Security;
+        if (p.User is not null)
+            s.SmtpUsername = p.User;
+        s.SmtpEnabled = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        busy = true;
+        try
+        {
+            await Site.SaveAsync(s, string.IsNullOrEmpty(newPassword) ? null : newPassword);
+            Load();
+            Show("Настройки сохранены и уже действуют.");
+        }
+        catch (Exception e)
+        {
+            Show("Не удалось сохранить: " + e.Message, error: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task TestAsync()
+    {
+        busy = true;
+        message = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(s.SmtpHost) || string.IsNullOrWhiteSpace(s.MailFromAddress))
+                throw new InvalidOperationException("Укажите SMTP-сервер и адрес отправителя.");
+            var password = string.IsNullOrEmpty(newPassword) ? Site.SmtpPassword(Site.Current) : newPassword;
+            await Mail.SendTestAsync(s, password, testTo!.Trim());
+            Show($"Письмо отправлено на {testTo}. Если его нет — проверьте «Спам». Не забудьте сохранить настройки.");
+        }
+        catch (Exception e)
+        {
+            Show("Письмо не отправлено: " + e.Message, error: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Show(string text, bool error = false)
+    {
+        message = text;
+        messageIsError = error;
+    }
+}

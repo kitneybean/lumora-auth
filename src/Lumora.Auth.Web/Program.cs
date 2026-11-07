@@ -50,7 +50,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services.AddSingleton<Lumora.Auth.Web.Settings.SiteSettingsService>();
+builder.Services.AddSingleton<Lumora.Auth.Web.Settings.SmtpEmailSender>();
+builder.Services.AddSingleton<IEmailSender<ApplicationUser>>(sp => sp.GetRequiredService<Lumora.Auth.Web.Settings.SmtpEmailSender>());
 builder.Services.AddHealthChecks().AddDbContextCheck<LumoraDbContext>();
 builder.Services.AddYggdrasil(builder.Configuration);
 builder.Services.AddScoped<Lumora.Auth.Web.Profiles.ProfileService>();
@@ -83,7 +85,10 @@ else
 }
 
 if (!lumoraSection.GetValue<bool>(nameof(LumoraOptions.SkipDatabaseInit)))
+{
     await DatabaseInitializer.InitializeAsync(app.Services);
+    await app.Services.GetRequiredService<Lumora.Auth.Web.Settings.SiteSettingsService>().LoadAsync();
+}
 
 // Create or load the texture signing key now rather than on the first game login.
 _ = app.Services.GetRequiredService<Lumora.Auth.Core.Yggdrasil.SigningKey>();

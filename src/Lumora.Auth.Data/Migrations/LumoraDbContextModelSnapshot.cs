@@ -218,6 +218,66 @@ namespace Lumora.Auth.Data.Migrations
                     b.ToTable("Profiles");
                 });
 
+            modelBuilder.Entity("Lumora.Auth.Core.Entities.SiteSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MailFromAddress")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("MailFromName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("MaxTokensPerUser")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("RegistrationOpen")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("RequireConfirmedEmail")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ServerName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("SmtpEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SmtpHost")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SmtpPasswordProtected")
+                        .HasColumnType("text");
+
+                    b.Property<int>("SmtpPort")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SmtpSecurity")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("SmtpUsername")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("TokenLifetimeDays")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SiteSettings");
+                });
+
             modelBuilder.Entity("Lumora.Auth.Core.Entities.Texture", b =>
                 {
                     b.Property<string>("Hash")

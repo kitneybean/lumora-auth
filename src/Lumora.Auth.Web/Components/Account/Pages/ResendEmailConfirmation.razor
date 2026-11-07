@@ -12,10 +12,10 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Resend email confirmation</PageTitle>
+<PageTitle>Письмо с подтверждением — Lumora</PageTitle>
 
-<h1>Resend email confirmation</h1>
-<h2>Enter your email.</h2>
+<h1>Отправить письмо ещё раз</h1>
+<h2 class="h5 text-body-secondary">Укажите e-mail, с которым регистрировались.</h2>
 <hr />
 <StatusMessage Message="@message" />
 <div class="row">
@@ -25,10 +25,10 @@
             <ValidationSummary class="text-danger" role="alert" />
             <div class="form-floating mb-3">
                 <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" aria-required="true" placeholder="name@example.com" />
-                <label for="Input.Email" class="form-label">Email</label>
+                <label for="Input.Email" class="form-label">E-mail</label>
                 <ValidationMessage For="() => Input.Email" class="text-danger" />
             </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Resend</button>
+            <button type="submit" class="w-100 btn btn-lg btn-primary">Отправить</button>
         </EditForm>
     </div>
 </div>
@@ -49,7 +49,7 @@
         var user = await UserManager.FindByEmailAsync(Input.Email!);
         if (user is null)
         {
-            message = "Verification email sent. Please check your email.";
+            message = "Если такой аккаунт есть, письмо отправлено. Проверьте и «Спам».";
             return;
         }
 
@@ -61,7 +61,7 @@
             new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
         await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
 
-        message = "Verification email sent. Please check your email.";
+        message = "Если такой аккаунт есть, письмо отправлено. Проверьте и «Спам».";
     }
 
     private sealed class InputModel
