@@ -14,24 +14,18 @@
 
 <PageTitle>Письмо с подтверждением — Lumora</PageTitle>
 
-<h1>Отправить письмо ещё раз</h1>
-<h2 class="h5 text-body-secondary">Укажите e-mail, с которым регистрировались.</h2>
-<hr />
+<AuthHeader Icon="email" Title="Отправить письмо ещё раз" Subtitle="Укажите e-mail, с которым регистрировались." />
 <StatusMessage Message="@message" />
-<div class="row">
-    <div class="col-md-4">
-        <EditForm Model="Input" FormName="resend-email-confirmation" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" aria-required="true" placeholder="name@example.com" />
-                <label for="Input.Email" class="form-label">E-mail</label>
-                <ValidationMessage For="() => Input.Email" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Отправить</button>
-        </EditForm>
+<EditForm Model="Input" FormName="resend-email-confirmation" OnValidSubmit="OnValidSubmitAsync" method="post">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" role="alert" />
+    <div class="mb-4">
+        <label for="Input.Email" class="form-label">E-mail</label>
+        <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" aria-required="true" placeholder="name@example.com" />
+        <ValidationMessage For="() => Input.Email" class="text-danger" />
     </div>
-</div>
+    <button type="submit" class="w-100 btn btn-lg btn-primary">Отправить</button>
+</EditForm>
 
 @code {
     private string? message;

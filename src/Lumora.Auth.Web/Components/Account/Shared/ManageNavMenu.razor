@@ -1,34 +1,20 @@
-﻿@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Identity
 @using Lumora.Auth.Data
 
 @inject SignInManager<ApplicationUser> SignInManager
 
-<ul class="nav nav-pills flex-column">
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage" Match="NavLinkMatch.All">Игровой профиль</NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/Skin">Скин</NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/Email">E-mail</NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/ChangePassword">Пароль</NavLink>
-    </li>
-    @if (hasExternalLogins)
-    {
-        <li class="nav-item">
-            <NavLink class="nav-link" href="Account/Manage/ExternalLogins">Внешние входы</NavLink>
-        </li>
-    }
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/TwoFactorAuthentication">Двухфакторная защита</NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/PersonalData">Личные данные</NavLink>
-    </li>
-</ul>
+<div class="lm-sidebar-title">Игрок</div>
+<NavLink href="Account/Manage" Match="NavLinkMatch.All"><Icon Name="account" Size="18" /> Профиль</NavLink>
+<NavLink href="Account/Manage/Skin"><Icon Name="skin" Size="18" /> Скин</NavLink>
+<div class="lm-sidebar-title">Безопасность</div>
+<NavLink href="Account/Manage/ChangePassword"><Icon Name="key" Size="18" /> Пароль</NavLink>
+<NavLink href="Account/Manage/TwoFactorAuthentication"><Icon Name="shieldcheck" Size="18" /> Двухфакторная защита</NavLink>
+<NavLink href="Account/Manage/Email"><Icon Name="email" Size="18" /> E-mail</NavLink>
+@if (hasExternalLogins)
+{
+    <NavLink href="Account/Manage/ExternalLogins"><Icon Name="login" Size="18" /> Внешние входы</NavLink>
+}
+<NavLink href="Account/Manage/PersonalData"><Icon Name="file" Size="18" /> Личные данные</NavLink>
 
 @code {
     private bool hasExternalLogins;

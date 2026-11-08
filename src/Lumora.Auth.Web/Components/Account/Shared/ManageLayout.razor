@@ -1,17 +1,11 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @layout Lumora.Auth.Web.Components.Layout.MainLayout
 
-<h1>Мой аккаунт</h1>
-
-<div>
-    <h2 class="h5 text-body-secondary">Ник, пароль и безопасность</h2>
-    <hr />
-    <div class="row">
-        <div class="col-lg-3">
-            <ManageNavMenu />
-        </div>
-        <div class="col-lg-9">
-            @Body
-        </div>
+<div class="lm-side-layout">
+    <aside class="lm-sidebar">
+        <ManageNavMenu />
+    </aside>
+    <div class="lm-content">
+        @Body
     </div>
 </div>

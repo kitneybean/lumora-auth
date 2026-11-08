@@ -9,32 +9,34 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<DeletePersonalData> Logger
 
-<PageTitle>Delete Personal Data</PageTitle>
+<PageTitle>Удаление аккаунта — Lumora</PageTitle>
 
-<StatusMessage Message="@message" />
-
-<h3>Delete Personal Data</h3>
-
-<div class="alert alert-warning" role="alert">
-    <p>
-        <strong>Deleting this data will permanently remove your account, and this cannot be recovered.</strong>
-    </p>
+<div class="lm-page-head">
+    <h1>Удаление аккаунта</h1>
 </div>
-
-<div>
-    <EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post">
-        <DataAnnotationsValidator />
-        <ValidationSummary class="text-danger" role="alert" />
-        @if (requirePassword)
-        {
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="Please enter your password." />
-                <label for="Input.Password" class="form-label">Password</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
+<StatusMessage Message="@message" />
+<div class="alert alert-danger lm-narrow" role="alert">
+    Аккаунт, игровой профиль и скин будут удалены навсегда. Восстановить их не получится, ник освободится для других.
+</div>
+<div class="card lm-narrow">
+    <div class="card-body">
+        <EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" role="alert" />
+            @if (requirePassword)
+            {
+                <div class="mb-3">
+                    <label for="Input.Password" class="form-label">Пароль для подтверждения</label>
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" />
+                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                </div>
+            }
+            <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-danger" type="submit"><Icon Name="delete" Size="18" /> Удалить аккаунт навсегда</button>
+                <a href="Account/Manage/PersonalData" class="btn btn-outline-secondary">Отмена</a>
             </div>
-        }
-        <button class="w-100 btn btn-lg btn-danger" type="submit">Delete data and close my account</button>
-    </EditForm>
+        </EditForm>
+    </div>
 </div>
 
 @code {
@@ -71,7 +73,7 @@
 
         if (requirePassword && !await UserManager.CheckPasswordAsync(user, Input.Password))
         {
-            message = "Error: Incorrect password.";
+            message = "Error: Неверный пароль.";
             return;
         }
 

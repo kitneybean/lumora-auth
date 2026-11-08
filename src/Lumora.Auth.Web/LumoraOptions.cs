@@ -32,6 +32,9 @@ public sealed class LumoraOptions
     /// <summary>Optional first administrator, created on startup if missing.</summary>
     public AdminSeedOptions Admin { get; set; } = new();
 
+    /// <summary>GitHub repository ("owner/name") whose latest release the download button points to; empty hides it.</summary>
+    public string LauncherRepository { get; set; } = "kitneybean/lumora-launcher";
+
     public SecurityOptions Security { get; set; } = new();
 }
 

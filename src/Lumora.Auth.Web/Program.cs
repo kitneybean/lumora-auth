@@ -68,6 +68,18 @@ builder.Services.AddScoped<Lumora.Auth.Web.Builds.ServerService>();
 builder.Services.AddScoped<Lumora.Auth.Web.Admin.PlayerAdminService>();
 builder.Services.AddSingleton<Lumora.Auth.Web.Launcher.AuthlibInjectorProvider>();
 builder.Services.AddSingleton<Lumora.Auth.Web.Launcher.GameVersionsService>();
+// Keep Russian text readable in HTML instead of &#x...; escapes (also makes pages smaller).
+builder.Services.Configure<Microsoft.Extensions.WebEncoders.WebEncoderOptions>(o =>
+    o.TextEncoderSettings = new System.Text.Encodings.Web.TextEncoderSettings(
+        System.Text.Unicode.UnicodeRanges.BasicLatin, System.Text.Unicode.UnicodeRanges.Latin1Supplement,
+        System.Text.Unicode.UnicodeRanges.Cyrillic, System.Text.Unicode.UnicodeRanges.GeneralPunctuation));
+builder.Services.AddSingleton<Lumora.Auth.Web.Showcase.ShowcaseService>();
+builder.Services.AddHttpClient(nameof(Lumora.Auth.Web.Showcase.ShowcaseService), c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(10);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("LumoraAuth/1.0 (launcher release check)");
+    c.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+});
 builder.Services.AddHttpClient(nameof(Lumora.Auth.Web.Launcher.AuthlibInjectorProvider), c => c.Timeout = TimeSpan.FromMinutes(2));
 builder.Services.AddHttpClient(nameof(Lumora.Auth.Web.Launcher.GameVersionsService), c => c.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddHttpClient(nameof(Lumora.Auth.Web.Builds.BuildService), c =>

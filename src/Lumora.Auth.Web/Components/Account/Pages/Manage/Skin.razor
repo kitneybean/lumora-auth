@@ -13,7 +13,10 @@
 
 <PageTitle>Скин — Lumora</PageTitle>
 
-<h3>Скин</h3>
+<div class="lm-page-head">
+    <h1>Скин</h1>
+    <p>Его видят все игроки на сервере — без модов.</p>
+</div>
 <StatusMessage />
 
 @if (profile is null)
@@ -46,9 +49,10 @@ else
         </div>
 
         <div class="col-md-7">
+            <div class="card"><div class="card-body">
             <form method="post" enctype="multipart/form-data" @formname="upload" @onsubmit="UploadAsync" class="mb-4">
                 <AntiforgeryToken />
-                <h5>Загрузить скин</h5>
+                <h2 class="h5 mb-3">Загрузить скин</h2>
                 <div class="mb-3">
                     <input class="form-control" type="file" name="file" accept="image/png,.png" required data-skin-file="#skin-canvas" />
                     <div class="form-text">PNG 64×64 (или старый формат 64×32), до 256 КБ. Готовые скины можно найти на сайтах со скинами для Minecraft.</div>
@@ -85,6 +89,7 @@ else
             <p class="small text-body-secondary mt-4 mb-0">
                 Новый скин появится в игре при следующем входе на сервер. Другие игроки увидят его после перезахода.
             </p>
+            </div></div>
         </div>
     </div>
 }

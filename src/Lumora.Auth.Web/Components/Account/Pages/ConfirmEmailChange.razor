@@ -9,11 +9,11 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Confirm email change</PageTitle>
+<PageTitle>Смена e-mail — Lumora</PageTitle>
 
-<h1>Confirm email change</h1>
-
+<AuthHeader Icon="email" Title="Смена e-mail" />
 <StatusMessage Message="@message" />
+<a href="Account/Manage/Email" class="btn btn-outline-secondary w-100">В кабинет</a>
 
 @code {
     private string? message;

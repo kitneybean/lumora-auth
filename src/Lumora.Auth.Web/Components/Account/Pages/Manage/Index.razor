@@ -6,47 +6,116 @@
 @using Lumora.Auth.Core.Profiles
 @using Lumora.Auth.Data
 @using Lumora.Auth.Web.Profiles
+@using Microsoft.EntityFrameworkCore
 
 @inject UserManager<ApplicationUser> UserManager
 @inject ProfileService Profiles
 @inject IdentityRedirectManager RedirectManager
+@inject LumoraDbContext Db
+@inject Lumora.Auth.Web.Yggdrasil.TokenService Tokens
+@inject Lumora.Auth.Web.Security.AuditService Audit
 
-<PageTitle>Игровой профиль — Lumora</PageTitle>
+<PageTitle>Профиль — Lumora</PageTitle>
 
-<h3>Игровой профиль</h3>
+<div class="lm-page-head">
+    <h1>Профиль</h1>
+    <p>Ваш персонаж в игре и вход в лаунчер.</p>
+</div>
 <StatusMessage />
 
-<div class="row">
-    <div class="col-xl-7">
+@if (profile is null)
+{
+    <div class="alert alert-warning">
+        У аккаунта ещё нет игрового профиля — без него нельзя зайти на сервер. Придумайте ник.
+    </div>
+}
+
+<div class="row g-4">
+    @if (profile is not null)
+    {
+        <div class="col-lg-5 col-xl-4">
+            <div class="card lm-player-card">
+                <div class="skin-box skin-box-sm" data-skin-box>
+                    <canvas id="skin-canvas" data-skin-viewer
+                            data-skin-url="@(profile.SkinHash is null ? "" : $"textures/{profile.SkinHash}")"
+                            data-skin-model="@(profile.SkinModel == SkinModel.Slim ? "slim" : "default")"></canvas>
+                    <div class="skin-box-fallback">
+                        @if (profile.SkinHash is not null)
+                        {
+                            <img src="textures/@profile.SkinHash" alt="Развёртка скина" class="skin-flat" />
+                        }
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-2">
+                        <PlayerHead SkinHash="@profile.SkinHash" Name="@profile.Name" Size="32" />
+                        <div class="min-w-0">
+                            <div class="h4 mb-0 text-truncate">@profile.Name</div>
+                            @if (isAdmin)
+                            {
+                                <span class="badge text-bg-primary">администратор</span>
+                            }
+                        </div>
+                    </div>
+                    <a href="Account/Manage/Skin" class="btn btn-outline-secondary w-100 mt-3"><Icon Name="skin" Size="18" /> Сменить скин</a>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="col">
         @if (profile is not null)
         {
-            <dl class="row mb-4">
-                <dt class="col-sm-4">Ник</dt>
-                <dd class="col-sm-8"><b>@profile.Name</b></dd>
-                <dt class="col-sm-4">UUID</dt>
-                <dd class="col-sm-8"><code>@MinecraftUuid.ToUnsigned(profile.Id)</code></dd>
-                <dt class="col-sm-4">Вход в лаунчер</dt>
-                <dd class="col-sm-8">по нику или e-mail <b>@email</b></dd>
-            </dl>
-        }
-        else
-        {
-            <div class="alert alert-warning">
-                У аккаунта ещё нет игрового профиля — без него нельзя зайти на сервер. Придумайте ник.
+            <div class="card mb-3">
+                <div class="card-body">
+                    <dl class="lm-props mb-0">
+                        <dt>Вход в лаунчер</dt>
+                        <dd>по нику <b>@profile.Name</b> или e-mail <b>@email</b></dd>
+                        <dt>UUID</dt>
+                        <dd><code>@MinecraftUuid.ToUnsigned(profile.Id)</code></dd>
+                        <dt>Двухфакторная защита</dt>
+                        <dd>
+                            @if (twoFactor)
+                            {
+                                <span class="text-success"><Icon Name="shieldcheck" Size="18" /> включена</span>
+                            }
+                            else
+                            {
+                                <span><span class="text-body-secondary">выключена</span> · <a href="Account/Manage/TwoFactorAuthentication">включить</a></span>
+                            }
+                        </dd>
+                        <dt>Сессии лаунчера</dt>
+                        <dd>
+                            @(sessions == 0 ? "нет активных" : $"активных: {sessions}")
+                        </dd>
+                    </dl>
+                    @if (sessions > 0)
+                    {
+                        <form method="post" @formname="sign-out-launchers" @onsubmit="SignOutLaunchersAsync" class="mt-3">
+                            <AntiforgeryToken />
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><Icon Name="logout" Size="16" /> Выйти из лаунчера на всех устройствах</button>
+                        </form>
+                    }
+                </div>
             </div>
         }
 
-        <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.PlayerName" id="Input.PlayerName" class="form-control" placeholder="Steve" />
-                <label for="Input.PlayerName">@(profile is null ? "Ник" : "Новый ник")</label>
-                <div class="form-text">@ProfileService.NameRules UUID при смене ника не меняется.</div>
-                <ValidationMessage For="() => Input.PlayerName" class="text-danger" />
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5 mb-3">@(profile is null ? "Создать профиль" : "Сменить ник")</h2>
+                <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger" role="alert" />
+                    <div class="mb-3">
+                        <label for="Input.PlayerName" class="form-label">@(profile is null ? "Ник" : "Новый ник")</label>
+                        <InputText @bind-Value="Input.PlayerName" id="Input.PlayerName" class="form-control lm-narrow" placeholder="Steve" />
+                        <div class="form-text">@ProfileService.NameRules UUID при смене ника не меняется.</div>
+                        <ValidationMessage For="() => Input.PlayerName" class="text-danger" />
+                    </div>
+                    <button type="submit" class="btn btn-primary">@(profile is null ? "Создать профиль" : "Сменить ник")</button>
+                </EditForm>
             </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">@(profile is null ? "Создать профиль" : "Сменить ник")</button>
-        </EditForm>
+        </div>
     </div>
 </div>
 
@@ -54,6 +123,9 @@
     private ApplicationUser? user;
     private PlayerProfile? profile;
     private string? email;
+    private bool twoFactor;
+    private bool isAdmin;
+    private int sessions;
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -74,6 +146,10 @@
 
         email = user.Email;
         profile = await Profiles.FindByUserAsync(user.Id);
+        twoFactor = await UserManager.GetTwoFactorEnabledAsync(user);
+        isAdmin = await UserManager.IsInRoleAsync(user, Roles.Admin);
+        var now = DateTimeOffset.UtcNow;
+        sessions = await Db.Tokens.CountAsync(t => t.UserId == user.Id && !t.IsRevoked && t.ExpiresAt > now);
     }
 
     private async Task OnValidSubmitAsync()
@@ -92,6 +168,15 @@
         RedirectManager.RedirectToCurrentPageWithStatus(
             error is null ? (profile is null ? "Профиль создан." : "Ник изменён.") : "Error: " + error,
             HttpContext);
+    }
+
+    private async Task SignOutLaunchersAsync()
+    {
+        if (user is null)
+            return;
+        await Tokens.RevokeAllAsync(user.Id);
+        Audit.Log(HttpContext, "launcher.signout-all", true, null, user.UserName);
+        RedirectManager.RedirectToCurrentPageWithStatus("Лаунчер вышел из аккаунта на всех устройствах.", HttpContext);
     }
 
     private sealed class InputModel

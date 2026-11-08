@@ -9,7 +9,6 @@
 
 <PageTitle>@(build?.Name ?? "Сборка") — Lumora</PageTitle>
 
-<AdminNav />
 
 @if (build is null)
 {
@@ -17,9 +16,9 @@
     return;
 }
 
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-    <a href="admin/builds" class="text-decoration-none">← Сборки</a>
-    <h2 class="h3 mb-0 ms-2">@build.Name</h2>
+<a href="admin/builds" class="lm-back"><Icon Name="chevron" Size="16" Class="lm-flip" /> Сборки</a>
+<div class="lm-page-head">
+    <h1>@build.Name</h1>
     <BuildStatus IsPublished="build.IsPublished" Revision="build.Revision" HasChanges="build.HasUnpublishedChanges" />
     <div class="ms-auto d-flex gap-2">
         <button class="btn btn-success" @onclick="PublishAsync" disabled="@busy">

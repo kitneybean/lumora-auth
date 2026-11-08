@@ -16,58 +16,35 @@
 
 <PageTitle>Вход — Lumora</PageTitle>
 
-<h1>Вход</h1>
-<div class="row">
-    <div class="col-lg-6">
-        <section>
-            <StatusMessage Message="@errorMessage" />
-            <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
-                <DataAnnotationsValidator />
-                <h2 class="h5 text-body-secondary">Аккаунт тот же, что в лаунчере.</h2>
-                <hr />
-                <ValidationSummary class="text-danger" role="alert" />
-                <div class="form-floating mb-3">
-                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="Steve или name@example.com" />
-                    <label for="Input.Email" class="form-label">Ник или e-mail</label>
-                    <ValidationMessage For="() => Input.Email" class="text-danger" />
-                </div>
-                <div class="form-floating mb-3">
-                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" />
-                    <label for="Input.Password" class="form-label">Пароль</label>
-                    <ValidationMessage For="() => Input.Password" class="text-danger" />
-                </div>
-                <div class="checkbox mb-3">
-                    <label class="form-label">
-                        <InputCheckbox @bind-Value="Input.RememberMe" class="darker-border-checkbox form-check-input" />
-                        Remember me
-                    </label>
-                </div>
-                <div>
-                    <button type="submit" class="w-100 btn btn-lg btn-primary">Войти</button>
-                </div>
-                <hr />
-                <div>
-                    <p>
-                        <a href="Account/ForgotPassword">Забыли пароль?</a>
-                    </p>
-                    <p>
-                        <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">Зарегистрироваться</a>
-                    </p>
-                    <p>
-                        <a href="Account/ResendEmailConfirmation">Письмо с подтверждением не пришло?</a>
-                    </p>
-                </div>
-            </EditForm>
-        </section>
+<AuthHeader Icon="login" Title="Вход" Subtitle="Тот же аккаунт, что и в лаунчере." />
+<StatusMessage Message="@errorMessage" />
+<EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" role="alert" />
+    <div class="mb-3">
+        <label for="Input.Email" class="form-label">Ник или e-mail</label>
+        <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="Steve" />
+        <ValidationMessage For="() => Input.Email" class="text-danger" />
     </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Другие способы входа</h3>
-            <hr />
-            <ExternalLoginPicker />
-        </section>
+    <div class="mb-3">
+        <div class="d-flex justify-content-between">
+            <label for="Input.Password" class="form-label">Пароль</label>
+            <a href="Account/ForgotPassword" class="small">Забыли пароль?</a>
+        </div>
+        <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" />
+        <ValidationMessage For="() => Input.Password" class="text-danger" />
     </div>
-</div>
+    <div class="form-check mb-4">
+        <InputCheckbox @bind-Value="Input.RememberMe" id="Input.RememberMe" class="form-check-input" />
+        <label class="form-check-label" for="Input.RememberMe">Запомнить меня</label>
+    </div>
+    <button type="submit" class="w-100 btn btn-lg btn-primary">Войти</button>
+</EditForm>
+<hr />
+<p class="text-center mb-1">
+    Нет аккаунта? <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">Зарегистрироваться</a>
+</p>
+<p class="text-center small mb-0"><a href="Account/ResendEmailConfirmation" class="text-body-secondary">Не пришло письмо с подтверждением?</a></p>
 
 @code {
     private string? errorMessage;
@@ -167,7 +144,5 @@
 
         [Display(Name = "Запомнить меня")]
         public bool RememberMe { get; set; }
-
-        public PasskeyInputModel? Passkey { get; set; }
     }
 }

@@ -1,21 +1,23 @@
-﻿<StatusMessage Message="@StatusMessage" />
-<h3>Recovery codes</h3>
-<div class="alert alert-warning" role="alert">
-    <p>
-        <strong>Put these codes in a safe place.</strong>
-    </p>
-    <p>
-        If you lose your device and don't have the recovery codes you will lose access to your account.
-    </p>
+﻿<div class="lm-page-head">
+    <h1>Коды восстановления</h1>
+    <p>Если телефон потеряется, войти можно будет одним из этих кодов. Каждый код работает один раз.</p>
 </div>
-<div class="row">
-    <div class="col-md-12">
-        @foreach (var recoveryCode in RecoveryCodes)
-        {
-            <div>
+<StatusMessage Message="@StatusMessage" />
+<div class="alert alert-warning lm-narrow" role="alert">
+    Сохраните коды сейчас — например, в менеджере паролей или на бумаге. Больше сайт их не покажет.
+</div>
+<div class="card lm-narrow">
+    <div class="card-body">
+        <div class="lm-recovery">
+            @foreach (var recoveryCode in RecoveryCodes)
+            {
                 <code class="recovery-code">@recoveryCode</code>
-            </div>
-        }
+            }
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-3">
+            <button type="button" class="btn btn-outline-secondary" data-copy="@string.Join("\n", RecoveryCodes)"><Icon Name="copy" Size="18" /> Скопировать</button>
+            <a href="Account/Manage/TwoFactorAuthentication" class="btn btn-primary">Готово</a>
+        </div>
     </div>
 </div>
 

@@ -1,0 +1,18 @@
+@* Heading of a centred auth card: icon badge, title and a short hint. *@
+<div class="lm-auth-head">
+    <span class="lm-auth-icon @(Tone is null ? "" : "lm-auth-icon-" + Tone)"><Icon Name="@Icon" Size="22" /></span>
+    <h1>@Title</h1>
+    @if (Subtitle is not null)
+    {
+        <p class="lm-sub">@Subtitle</p>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string Icon { get; set; } = "account";
+    [Parameter] public string? Tone { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

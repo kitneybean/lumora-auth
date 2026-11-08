@@ -1,0 +1,10 @@
+@* Inline SVG icon from Material Design Icons; inherits the text colour. *@
+<svg class="lm-icon @Class" width="@Size" height="@Size" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="@(IconPaths.All.TryGetValue(Name, out var p) ? p : "")" fill="currentColor" />
+</svg>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+    [Parameter] public int Size { get; set; } = 20;
+    [Parameter] public string? Class { get; set; }
+}

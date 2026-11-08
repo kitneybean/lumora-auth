@@ -1,0 +1,18 @@
+@* Face of a Minecraft skin (with the hat layer), cut from the texture by CSS. *@
+@if (string.IsNullOrEmpty(SkinHash))
+{
+    <span class="lm-head lm-head-empty @Class" style="--s: @(Size)px">@Initial</span>
+}
+else
+{
+    <span class="lm-head @Class" style="--s: @(Size)px; --skin: url('/textures/@SkinHash')" role="img" aria-label="@Name"></span>
+}
+
+@code {
+    [Parameter] public string? SkinHash { get; set; }
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public int Size { get; set; } = 28;
+    [Parameter] public string? Class { get; set; }
+
+    private string Initial => string.IsNullOrWhiteSpace(Name) ? "?" : Name.Trim()[0].ToString().ToUpperInvariant();
+}

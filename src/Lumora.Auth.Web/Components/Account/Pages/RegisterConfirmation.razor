@@ -8,14 +8,13 @@
 
 <PageTitle>Подтвердите e-mail — Lumora</PageTitle>
 
-<h1>Почти готово</h1>
-
+<AuthHeader Icon="email" Title="Почти готово" />
 <StatusMessage Message="@statusMessage" />
 
 @if (statusMessage is null)
 {
     <p>Мы отправили письмо на <b>@Email</b>. Откройте ссылку из письма, чтобы подтвердить почту, — после этого можно входить на сайт и в лаунчер.</p>
-    <p class="text-body-secondary">Письма нет? Проверьте «Спам» или <a href="Account/ResendEmailConfirmation">отправьте ещё раз</a>.</p>
+    <p class="text-body-secondary mb-0">Письма нет? Проверьте «Спам» или <a href="Account/ResendEmailConfirmation">отправьте ещё раз</a>.</p>
 }
 
 @code {

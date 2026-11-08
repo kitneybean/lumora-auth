@@ -6,13 +6,12 @@
 
 @if (HttpContext.User.IsInRole(Roles.Admin) && !Policies.HasMfa(HttpContext.User))
 {
-    <Lumora.Auth.Web.Components.Shared.AdminNeeds2fa />
+    <AdminNeeds2fa />
 }
 else
 {
-    <h1>Нет доступа</h1>
-    <p>Эта страница доступна только администраторам.</p>
-    <p><a href="">На главную</a></p>
+    <AuthHeader Icon="lock" Tone="danger" Title="Нет доступа" Subtitle="Эта страница доступна только администраторам." />
+    <a href="" class="btn btn-outline-secondary w-100">На главную</a>
 }
 
 @code {

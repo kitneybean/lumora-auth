@@ -1,0 +1,18 @@
+@inherits LayoutComponentBase
+@layout Lumora.Auth.Web.Components.Layout.MainLayout
+
+<div class="lm-side-layout">
+    <aside class="lm-sidebar">
+        <div class="lm-sidebar-title">Админка</div>
+        <NavLink href="admin" Match="NavLinkMatch.All"><Icon Name="dashboard" Size="18" /> Обзор</NavLink>
+        <NavLink href="admin/servers"><Icon Name="servers" Size="18" /> Серверы</NavLink>
+        <NavLink href="admin/builds"><Icon Name="package" Size="18" /> Сборки</NavLink>
+        <NavLink href="admin/players"><Icon Name="players" Size="18" /> Игроки</NavLink>
+        <div class="lm-sidebar-title">Система</div>
+        <NavLink href="admin/security"><Icon Name="shield" Size="18" /> Безопасность</NavLink>
+        <NavLink href="admin/settings"><Icon Name="cog" Size="18" /> Настройки</NavLink>
+    </aside>
+    <div class="lm-content">
+        @Body
+    </div>
+</div>

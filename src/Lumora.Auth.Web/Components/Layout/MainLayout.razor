@@ -1,23 +1,47 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject Lumora.Auth.Web.Settings.SiteSettingsService Settings
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
-
-    <main>
-        <div class="top-row px-4">
-            <span class="text-body-secondary small">Lumora — аккаунты и сборки для Minecraft</span>
+<header class="lm-topbar">
+    <div class="container-xl">
+        <a class="lm-logo" href="">
+            <img src="favicon.svg" alt="" width="28" height="28" />
+            <span>@Settings.Current.ServerName</span>
+        </a>
+        <nav class="lm-topnav" id="lm-topnav" data-nav-close>
+            <NavLink href="" Match="NavLinkMatch.All"><Icon Name="home" Size="18" /> Главная</NavLink>
+            <a href="#servers"><Icon Name="servers" Size="18" /> Серверы</a>
+            <a href="#start"><Icon Name="rocket" Size="18" /> Как начать</a>
+            <a href="#download"><Icon Name="download" Size="18" /> Лаунчер</a>
+        </nav>
+        <div class="lm-top-actions">
+            <UserMenu />
         </div>
+        <button type="button" class="lm-iconbtn lm-mobile-toggle" data-nav-toggle aria-controls="lm-topnav" aria-label="Меню">
+            <Icon Name="menu" />
+        </button>
+    </div>
+</header>
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+<main class="lm-main">
+    @Body
+</main>
+
+<footer class="lm-footer">
+    <div class="container-xl d-flex flex-wrap gap-3 justify-content-between">
+        <div>
+            <div class="lm-logo mb-1"><img src="favicon.svg" alt="" width="20" height="20" /> <span>@Settings.Current.ServerName</span></div>
+            <div>Minecraft — товарный знак Mojang AB. Проект не связан с Mojang и Microsoft.</div>
+        </div>
+        <div class="d-flex gap-3 align-items-start">
+            <a href="#download">Лаунчер</a>
+            <a href="Account/Manage">Кабинет</a>
+            <a href="https://github.com/kitneybean" target="_blank" rel="noopener"><Icon Name="github" Size="16" /> GitHub</a>
+        </div>
+    </div>
+</footer>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    Произошла ошибка. Страница может работать неправильно.
+    <a href="." class="reload">Обновить</a>
+    <span class="dismiss">✕</span>
 </div>

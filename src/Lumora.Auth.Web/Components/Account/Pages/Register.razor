@@ -22,53 +22,50 @@
 
 <PageTitle>Регистрация — Lumora</PageTitle>
 
-<h1>Регистрация</h1>
+<AuthHeader Icon="register" Title="Регистрация" Subtitle="Аккаунт для сайта и лаунчера. Ник — имя персонажа в игре." />
 
 @if (!Site.Current.RegistrationOpen)
 {
-    <div class="alert alert-warning">Регистрация сейчас закрыта. Если у вас уже есть аккаунт — <a href="Account/Login">войдите</a>.</div>
+    <div class="alert alert-warning mb-0">Регистрация сейчас закрыта. Если аккаунт уже есть — <a href="Account/Login" class="alert-link">войдите</a>.</div>
     return;
 }
 
-<div class="row">
-    <div class="col-lg-6">
-        <StatusMessage Message="@Message" />
-        <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
-            <DataAnnotationsValidator />
-            <p class="text-body-secondary">Аккаунт нужен для входа в лаунчер. Ник — это имя персонажа в игре.</p>
-            <hr />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.PlayerName" id="Input.PlayerName" class="form-control" autocomplete="nickname" aria-required="true" placeholder="Steve" />
-                <label for="Input.PlayerName">Ник в игре</label>
-                <div class="form-text">@ProfileService.NameRules</div>
-                <ValidationMessage For="() => Input.PlayerName" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                <label for="Input.Email">E-mail</label>
-                <ValidationMessage For="() => Input.Email" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.Password">Пароль</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.ConfirmPassword">Пароль ещё раз</label>
-                <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
-            </div>
-            @* Honeypot: hidden from people, bots fill every field. *@
-            <div class="lm-hp" aria-hidden="true">
-                <label for="Input.Website">Сайт</label>
-                <InputText @bind-Value="Input.Website" id="Input.Website" tabindex="-1" autocomplete="off" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Зарегистрироваться</button>
-            <p class="mt-3">Уже есть аккаунт? <a href="Account/Login">Войти</a></p>
-        </EditForm>
+<StatusMessage Message="@Message" />
+<EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" role="alert" />
+    <div class="mb-3">
+        <label for="Input.PlayerName" class="form-label">Ник в игре</label>
+        <InputText @bind-Value="Input.PlayerName" id="Input.PlayerName" class="form-control" autocomplete="nickname" aria-required="true" placeholder="Steve" />
+        <div class="form-text">@ProfileService.NameRules</div>
+        <ValidationMessage For="() => Input.PlayerName" class="text-danger" />
     </div>
-</div>
+    <div class="mb-3">
+        <label for="Input.Email" class="form-label">E-mail</label>
+        <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
+        <ValidationMessage For="() => Input.Email" class="text-danger" />
+    </div>
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6">
+            <label for="Input.Password" class="form-label">Пароль</label>
+            <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" />
+            <ValidationMessage For="() => Input.Password" class="text-danger" />
+        </div>
+        <div class="col-sm-6">
+            <label for="Input.ConfirmPassword" class="form-label">Ещё раз</label>
+            <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" />
+            <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
+        </div>
+    </div>
+    @* Honeypot: hidden from people, bots fill every field. *@
+    <div class="lm-hp" aria-hidden="true">
+        <label for="Input.Website">Сайт</label>
+        <InputText @bind-Value="Input.Website" id="Input.Website" tabindex="-1" autocomplete="off" />
+    </div>
+    <button type="submit" class="w-100 btn btn-lg btn-primary">Создать аккаунт</button>
+</EditForm>
+<hr />
+<p class="text-center mb-0">Уже есть аккаунт? <a href="Account/Login">Войти</a></p>
 
 @code {
     private string? errorMessage;

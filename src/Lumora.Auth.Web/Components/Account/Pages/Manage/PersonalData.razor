@@ -6,24 +6,34 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Personal Data</PageTitle>
+<PageTitle>Личные данные — Lumora</PageTitle>
 
+<div class="lm-page-head">
+    <h1>Личные данные</h1>
+    <p>Всё, что сайт хранит о вас: e-mail, ник, скин и настройки безопасности.</p>
+</div>
 <StatusMessage />
-<h3>Personal Data</h3>
-
-<div class="row">
-    <div class="col-md-6">
-        <p>Your account contains personal data that you have given us. This page allows you to download or delete that data.</p>
-        <p>
-            <strong>Deleting this data will permanently remove your account, and this cannot be recovered.</strong>
-        </p>
-        <form action="Account/Manage/DownloadPersonalData" method="post">
-            <AntiforgeryToken />
-            <button class="btn btn-primary" type="submit">Download</button>
-        </form>
-        <p>
-            <a href="Account/Manage/DeletePersonalData" class="btn btn-danger">Delete</a>
-        </p>
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5"><Icon Name="download" /> Скачать</h2>
+                <p class="text-body-secondary">Файл JSON со всеми данными аккаунта.</p>
+                <form action="Account/Manage/DownloadPersonalData" method="post">
+                    <AntiforgeryToken />
+                    <button class="btn btn-outline-secondary" type="submit">Скачать данные</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100 lm-danger-card">
+            <div class="card-body">
+                <h2 class="h5"><Icon Name="delete" /> Удалить аккаунт</h2>
+                <p class="text-body-secondary">Аккаунт, ник и скин удаляются навсегда.</p>
+                <a href="Account/Manage/DeletePersonalData" class="btn btn-outline-danger">Удалить…</a>
+            </div>
+        </div>
     </div>
 </div>
 

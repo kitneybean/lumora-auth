@@ -9,29 +9,20 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<LoginWithRecoveryCode> Logger
 
-<PageTitle>Recovery code verification</PageTitle>
+<PageTitle>Код восстановления — Lumora</PageTitle>
 
-<h1>Recovery code verification</h1>
-<hr />
+<AuthHeader Icon="key" Title="Код восстановления" Subtitle="Введите один из кодов, сохранённых при включении двухфакторной защиты. Каждый код работает один раз." />
 <StatusMessage Message="@message" />
-<p>
-    You have requested to log in with a recovery code. This login will not be remembered until you provide
-    an authenticator app code at log in or disable 2FA and log in again.
-</p>
-<div class="row">
-    <div class="col-md-4">
-        <EditForm Model="Input" FormName="login-with-recovery-code" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.RecoveryCode" id="Input.RecoveryCode" class="form-control" autocomplete="off" placeholder="RecoveryCode" />
-                <label for="Input.RecoveryCode" class="form-label">Recovery Code</label>
-                <ValidationMessage For="() => Input.RecoveryCode" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Log in</button>
-        </EditForm>
+<EditForm Model="Input" FormName="login-with-recovery-code" OnValidSubmit="OnValidSubmitAsync" method="post">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" role="alert" />
+    <div class="mb-4">
+        <label for="Input.RecoveryCode" class="form-label">Код восстановления</label>
+        <InputText @bind-Value="Input.RecoveryCode" id="Input.RecoveryCode" class="form-control lm-code-input" autocomplete="off" placeholder="XXXXX-XXXXX" />
+        <ValidationMessage For="() => Input.RecoveryCode" class="text-danger" />
     </div>
-</div>
+    <button type="submit" class="w-100 btn btn-lg btn-primary">Войти</button>
+</EditForm>
 
 @code {
     private string? message;

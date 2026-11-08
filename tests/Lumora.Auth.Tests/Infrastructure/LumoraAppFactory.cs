@@ -47,7 +47,11 @@ public sealed class LumoraAppFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.ConfigureServices(services =>
         {
             // No internet downloads in tests; blocklists are set directly where needed.
-            services.PostConfigure<Lumora.Auth.Web.LumoraOptions>(o => o.Security.BlocklistUrls.Clear());
+            services.PostConfigure<Lumora.Auth.Web.LumoraOptions>(o =>
+            {
+                o.Security.BlocklistUrls.Clear();
+                o.LauncherRepository = ""; // no GitHub calls from tests
+            });
             services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter, TestClientIpFilter>();
         });
     }

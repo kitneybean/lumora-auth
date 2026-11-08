@@ -4,6 +4,7 @@
     <Project Path="src/Lumora.Auth.Data/Lumora.Auth.Data.csproj" />
     <Project Path="src/Lumora.Auth.Web/Lumora.Auth.Web.csproj" />
     <Project Path="src/Lumora.Contracts/Lumora.Contracts.csproj" />
+    <Project Path="src/Lumora.Shared/Lumora.Shared.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Lumora.Auth.Tests/Lumora.Auth.Tests.csproj" />

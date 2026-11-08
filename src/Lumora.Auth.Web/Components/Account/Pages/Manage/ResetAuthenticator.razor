@@ -8,26 +8,20 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<ResetAuthenticator> Logger
 
-<PageTitle>Reset authenticator key</PageTitle>
+<PageTitle>Сброс ключа — Lumora</PageTitle>
 
+<div class="lm-page-head">
+    <h1>Сбросить ключ аутентификатора</h1>
+</div>
 <StatusMessage />
-<h3>Reset authenticator key</h3>
-<div class="alert alert-warning" role="alert">
-    <p>
-        <span class="glyphicon glyphicon-warning-sign"></span>
-        <strong>If you reset your authenticator key your authenticator app will not work until you reconfigure it.</strong>
-    </p>
-    <p>
-        This process disables 2FA until you verify your authenticator app.
-        If you do not complete your authenticator app configuration you may lose access to your account.
-    </p>
+<div class="alert alert-warning lm-narrow" role="alert">
+    Старые коды из приложения перестанут подходить, а двухфакторная защита выключится, пока вы не подключите приложение заново.
 </div>
-<div>
-    <form @formname="reset-authenticator" @onsubmit="OnSubmitAsync" method="post">
-        <AntiforgeryToken />
-        <button class="btn btn-danger" type="submit">Reset authenticator key</button>
-    </form>
-</div>
+<form @formname="reset-authenticator" @onsubmit="OnSubmitAsync" method="post" class="d-flex flex-wrap gap-2">
+    <AntiforgeryToken />
+    <button class="btn btn-danger" type="submit">Сбросить ключ</button>
+    <a href="Account/Manage/TwoFactorAuthentication" class="btn btn-outline-secondary">Отмена</a>
+</form>
 
 @code {
     [CascadingParameter]
@@ -51,7 +45,7 @@
 
         RedirectManager.RedirectToWithStatus(
             "Account/Manage/EnableAuthenticator",
-            "Your authenticator app key has been reset, you will need to configure your authenticator app using the new key.",
+            "Ключ сброшен. Подключите приложение-аутентификатор заново с новым ключом.",
             HttpContext);
     }
 }

@@ -13,39 +13,30 @@
 
 <PageTitle>Код подтверждения — Lumora</PageTitle>
 
-<h1>Код подтверждения</h1>
-<hr />
+<AuthHeader Icon="shieldcheck" Title="Код подтверждения" Subtitle="Аккаунт защищён двухфакторной проверкой. Введите шестизначный код из приложения-аутентификатора." />
 <StatusMessage Message="@message" />
-<p>Аккаунт защищён двухфакторной проверкой. Введите шестизначный код из приложения-аутентификатора.</p>
-<div class="row">
-    <div class="col-md-4">
-        <EditForm Model="Input" FormName="login-with-2fa" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
-            <input type="hidden" name="RememberMe" value="@RememberMe" />
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.TwoFactorCode" id="Input.TwoFactorCode" class="form-control" autocomplete="off" />
-                <label for="Input.TwoFactorCode" class="form-label">Код из приложения</label>
-                <ValidationMessage For="() => Input.TwoFactorCode" class="text-danger" />
-            </div>
-            @if (!isAdmin)
-            {
-                <div class="checkbox mb-3">
-                    <label for="remember-machine" class="form-label">
-                        <InputCheckbox @bind-Value="Input.RememberMachine" />
-                        Запомнить этот компьютер на 14 дней
-                    </label>
-                </div>
-            }
-            <div>
-                <button type="submit" class="w-100 btn btn-lg btn-primary">Войти</button>
-            </div>
-        </EditForm>
+<EditForm Model="Input" FormName="login-with-2fa" OnValidSubmit="OnValidSubmitAsync" method="post">
+    <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+    <input type="hidden" name="RememberMe" value="@RememberMe" />
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" role="alert" />
+    <div class="mb-3">
+        <label for="Input.TwoFactorCode" class="form-label">Код из приложения</label>
+        <InputText @bind-Value="Input.TwoFactorCode" id="Input.TwoFactorCode" class="form-control lm-code-input" autocomplete="one-time-code" inputmode="numeric" placeholder="000 000" />
+        <ValidationMessage For="() => Input.TwoFactorCode" class="text-danger" />
     </div>
-</div>
-<p>
-    Нет доступа к телефону? <a href="Account/LoginWithRecoveryCode?ReturnUrl=@ReturnUrl">Войдите с кодом восстановления</a>.
+    @if (!isAdmin)
+    {
+        <div class="form-check mb-3">
+            <InputCheckbox @bind-Value="Input.RememberMachine" id="remember-machine" class="form-check-input" />
+            <label for="remember-machine" class="form-check-label">Запомнить этот компьютер на 14 дней</label>
+        </div>
+    }
+    <button type="submit" class="w-100 btn btn-lg btn-primary mt-2">Подтвердить</button>
+</EditForm>
+<hr />
+<p class="text-center small mb-0">
+    Нет доступа к телефону? <a href="Account/LoginWithRecoveryCode?ReturnUrl=@ReturnUrl">Войти с кодом восстановления</a>
 </p>
 
 @code {

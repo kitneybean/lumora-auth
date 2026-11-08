@@ -1,15 +1,15 @@
-@* Tabs shown on every admin page. Not routable, so no [Authorize] needed here. *@
-<div class="d-flex align-items-center gap-3 mb-3">
-    <h1 class="mb-0">Админка</h1>
+@* Page header of an admin page (the menu itself lives in AdminLayout). *@
+<div class="lm-page-head">
+    <h1>@Title</h1>
+    @Actions
+    @if (Subtitle is not null)
+    {
+        <p>@Subtitle</p>
+    }
 </div>
-<ul class="nav nav-tabs mb-4">
-    <li class="nav-item"><NavLink class="nav-link" href="admin" Match="NavLinkMatch.All">Обзор</NavLink></li>
-    <li class="nav-item"><NavLink class="nav-link" href="admin/builds">Сборки</NavLink></li>
-    <li class="nav-item"><NavLink class="nav-link" href="admin/servers">Серверы</NavLink></li>
-    <li class="nav-item"><NavLink class="nav-link" href="admin/players">Игроки</NavLink></li>
-    <li class="nav-item"><NavLink class="nav-link" href="admin/security">Безопасность</NavLink></li>
-    <li class="nav-item"><NavLink class="nav-link" href="admin/settings">Настройки</NavLink></li>
-</ul>
 
 @code {
+    [Parameter] public string Title { get; set; } = "Админка";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
 }

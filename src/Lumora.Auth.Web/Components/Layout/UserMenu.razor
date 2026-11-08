@@ -1,0 +1,47 @@
+@using Lumora.Auth.Data
+@using Lumora.Auth.Web.Profiles
+@inject IServiceScopeFactory Scopes
+
+<AuthorizeView>
+    <Authorized>
+        @if (context.User.IsInRole(Roles.Admin))
+        {
+            <a class="lm-iconbtn" href="admin" title="Админка"><Icon Name="admin" /></a>
+        }
+        <a class="lm-account-chip" href="Account/Manage" title="Кабинет">
+            <PlayerHead SkinHash="@skinHash" Name="@(playerName ?? context.User.Identity?.Name)" />
+            <span>@(playerName ?? context.User.Identity?.Name)</span>
+        </a>
+        <form action="Account/Logout" method="post" class="d-inline-flex">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="" />
+            <button type="submit" class="lm-iconbtn" title="Выйти"><Icon Name="logout" /></button>
+        </form>
+    </Authorized>
+    <NotAuthorized>
+        <a class="btn btn-sm btn-outline-secondary" href="Account/Login"><Icon Name="login" Size="18" /> Войти</a>
+        <a class="btn btn-sm btn-primary lm-hide-xs" href="Account/Register">Регистрация</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string? skinHash;
+    private string? playerName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is null)
+            return;
+        var user = (await AuthState).User;
+        var id = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (id is null)
+            return;
+        // Own scope: the page may be using its DbContext at the same time.
+        using var scope = Scopes.CreateScope();
+        var profile = await scope.ServiceProvider.GetRequiredService<ProfileService>().FindByUserAsync(id);
+        skinHash = profile?.SkinHash;
+        playerName = profile?.Name;
+    }
+}

@@ -1,16 +1,223 @@
 @page "/"
+@attribute [StreamRendering]
+@using Lumora.Auth.Web.Showcase
+@inject ShowcaseService Showcase
+@inject Lumora.Auth.Web.Settings.SiteSettingsService Settings
+@inject Microsoft.Extensions.Options.IOptions<LumoraOptions> Options
 
-<PageTitle>Lumora</PageTitle>
+<PageTitle>@name — Minecraft-сервер</PageTitle>
 
-<h1>Lumora</h1>
+<section class="lm-space-wrap lm-hero">
+    <canvas class="lm-space" data-space data-seed="7" data-planet="0.8,0.84" data-planet-size="0.42" data-moon="0.52,0.24"></canvas>
+    <div class="lm-scrim lm-scrim-hero"></div>
+    <div class="container-xl py-5">
+        <div class="lm-hero-text">
+            <span class="lm-eyebrow"><Icon Name="cube" Size="16" /> Minecraft с модами</span>
+            <h1 class="mt-3 mb-3">@name</h1>
+            <p class="lead mb-4">Свой сервер и свой лаунчер. Сборка модов, скины и вход настраиваются сами: нажми «Играть» — и ты уже в игре.</p>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-lg btn-primary" href="#download" data-os-download>
+                    <Icon Name="download" /> <span data-os-label>Скачать лаунчер</span>
+                </a>
+                <AuthorizeView>
+                    <Authorized>
+                        <a class="btn btn-lg btn-outline-secondary" href="Account/Manage"><Icon Name="account" /> Мой кабинет</a>
+                    </Authorized>
+                    <NotAuthorized>
+                        <a class="btn btn-lg btn-outline-secondary" href="Account/Register"><Icon Name="register" /> Создать аккаунт</a>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+            @if (servers is { Count: > 0 })
+            {
+                var players = servers.Where(s => s.Status.IsOnline).Sum(s => s.Status.Players);
+                var anyOnline = servers.Any(s => s.Status.IsOnline);
+                <div class="lm-hero-stats mt-4">
+                    <span><span class="lm-dot @(anyOnline ? "online" : "")"></span> @players @Plural(players, "игрок", "игрока", "игроков") онлайн</span>
+                    <span><Icon Name="servers" Size="16" /> @servers.Count @Plural(servers.Count, "сервер", "сервера", "серверов")</span>
+                </div>
+            }
+        </div>
+    </div>
+</section>
 
-<p>Сервер авторизации Lumora: аккаунты, скины и сборки для Minecraft.</p>
+<section class="lm-section" id="servers">
+    <div class="container-xl">
+        <div class="lm-section-title">
+            <div>
+                <h2>Серверы</h2>
+                <p>Статус обновляется раз в полминуты.</p>
+            </div>
+        </div>
+        @if (servers is null)
+        {
+            <div class="row g-3">
+                <div class="col-lg-6"><div class="card lm-skeleton"></div></div>
+                <div class="col-lg-6"><div class="card lm-skeleton"></div></div>
+            </div>
+        }
+        else if (servers.Count == 0)
+        {
+            <div class="lm-empty">Серверы скоро появятся.</div>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var s in servers)
+                {
+                    <div class="col-lg-6">
+                        <div class="card h-100 lm-card-hover">
+                            <div class="card-body d-flex gap-3">
+                                @if (s.HasIcon)
+                                {
+                                    <img class="lm-server-icon" src="api/launcher/servers/@s.Id/icon" alt="" width="56" height="56" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <div class="lm-server-icon">@s.Name.Trim()[0]</div>
+                                }
+                                <div class="flex-grow-1 min-w-0">
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <h3 class="h5 mb-0">@s.Name</h3>
+                                        @if (s.Status.IsOnline)
+                                        {
+                                            <span class="badge text-bg-success">онлайн</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge text-bg-secondary">недоступен</span>
+                                        }
+                                        @if (s.GameVersion is not null)
+                                        {
+                                            <span class="badge text-bg-light">@s.GameVersion</span>
+                                        }
+                                    </div>
+                                    <p class="text-body-secondary mb-2 mt-1 lm-clamp">@(s.Description ?? s.Status.Motd ?? "Minecraft-сервер с модами")</p>
+                                    <div class="d-flex flex-wrap align-items-center gap-3 small text-body-secondary">
+                                        @if (s.Status.IsOnline)
+                                        {
+                                            <span><Icon Name="players" Size="16" /> @s.Status.Players / @s.Status.MaxPlayers</span>
+                                            <span><Icon Name="signal" Size="16" /> @s.Status.PingMs мс</span>
+                                        }
+                                        @if (s.BuildName is not null)
+                                        {
+                                            <span><Icon Name="package" Size="16" /> @s.BuildName</span>
+                                        }
+                                        <button type="button" class="lm-copy ms-auto" data-copy="@s.Address" title="Скопировать адрес">
+                                            <span>@s.Address</span> <Icon Name="copy" Size="16" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>
 
-<AuthorizeView>
-    <Authorized>
-        <p>Вы вошли как <b>@context.User.Identity?.Name</b>.</p>
-    </Authorized>
-    <NotAuthorized>
-        <p><a href="Account/Register">Зарегистрируйтесь</a> или <a href="Account/Login">войдите</a>, чтобы играть.</p>
-    </NotAuthorized>
-</AuthorizeView>
+<section class="lm-section" id="start">
+    <div class="container-xl">
+        <div class="lm-section-title"><div><h2>Как начать</h2><p>Три шага — и ты на сервере.</p></div></div>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="lm-step">
+                    <div class="lm-step-num">1</div>
+                    <h3 class="h5">Создай аккаунт</h3>
+                    <p class="text-body-secondary mb-2">Ник станет именем персонажа в игре, пароль нужен для входа в лаунчер.</p>
+                    <a href="Account/Register">Регистрация →</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="lm-step">
+                    <div class="lm-step-num">2</div>
+                    <h3 class="h5">Скачай лаунчер</h3>
+                    <p class="text-body-secondary mb-2">Он сам поставит Java, нужную версию Minecraft, NeoForge и все моды сборки.</p>
+                    <a href="#download">Скачать →</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="lm-step">
+                    <div class="lm-step-num">3</div>
+                    <h3 class="h5">Нажми «Играть»</h3>
+                    <p class="text-body-secondary mb-2">Лаунчер обновит сборку и сразу подключит к серверу. Скин загружается в кабинете.</p>
+                    <a href="Account/Manage/Skin">Мой скин →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="lm-section" id="download">
+    <div class="container-xl">
+        <div class="card lm-download">
+            <div class="card-body d-flex flex-wrap gap-4 align-items-center">
+                <img src="icon-192.png" alt="" width="72" height="72" class="lm-download-logo" />
+                <div class="flex-grow-1">
+                    <h2 class="h3 mb-1">Лаунчер @name</h2>
+                    @if (release is not null)
+                    {
+                        <p class="text-body-secondary mb-0">Версия @release.Version от @release.PublishedAt.ToLocalTime().ToString("d MMMM yyyy", Ru). Дальше обновляется сам.</p>
+                    }
+                    else if (releaseLoaded)
+                    {
+                        <p class="text-body-secondary mb-0">Для Windows, Linux и macOS.</p>
+                    }
+                    else
+                    {
+                        <p class="text-body-secondary mb-0">Проверяем последнюю версию…</p>
+                    }
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    @if (release is { Downloads.Count: > 0 })
+                    {
+                        @foreach (var d in release.Downloads)
+                        {
+                            <a class="btn btn-outline-secondary" href="@d.Url" data-os="@d.Os" data-os-name="@d.Label" rel="nofollow">
+                                <Icon Name="@(d.Os == "macos" ? "apple" : d.Os)" Size="18" /> @d.Label
+                                <span class="lm-size">@FormatSize(d.Size)</span>
+                            </a>
+                        }
+                        <a class="btn btn-link" href="@release.PageUrl" target="_blank" rel="noopener">Все версии</a>
+                    }
+                    else if (releaseLoaded && repoUrl is not null)
+                    {
+                        <a class="btn btn-primary" href="@repoUrl" target="_blank" rel="noopener"><Icon Name="github" Size="18" /> Релизы на GitHub</a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Ru = System.Globalization.CultureInfo.GetCultureInfo("ru-RU");
+
+    private string name = "Lumora";
+    private IReadOnlyList<ShowcaseServer>? servers;
+    private LauncherRelease? release;
+    private bool releaseLoaded;
+    private string? repoUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        name = Settings.Current.ServerName;
+        var repo = Options.Value.LauncherRepository;
+        repoUrl = string.IsNullOrWhiteSpace(repo) ? null : $"https://github.com/{repo}/releases/latest";
+        var releaseTask = Showcase.GetLauncherReleaseAsync();
+        servers = await Showcase.GetServersAsync();
+        release = await releaseTask;
+        releaseLoaded = true;
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes >= 1 << 20 ? $"{bytes / (double)(1 << 20):0} МБ" : $"{bytes / 1024} КБ";
+
+    private static string Plural(int n, string one, string few, string many)
+    {
+        if (n % 100 is >= 11 and <= 14)
+            return many;
+        return (n % 10) switch { 1 => one, >= 2 and <= 4 => few, _ => many };
+    }
+}
