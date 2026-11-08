@@ -213,7 +213,7 @@ public class AgentTests(LumoraAppFactory app)
     }
 
     private static ServerStatusReportDto Report(Guid id, ManagedServerState state, params string[] players) =>
-        new(id, state, null, null, 1, players, 12.5, 2048, 500, DateTimeOffset.UtcNow, null);
+        new(id, state, null, null, null, 1, players, 12.5, 2048, 500, DateTimeOffset.UtcNow, null);
 
     private async Task<T> WithBuilds<T>(Func<BuildService, Task<T>> action)
     {

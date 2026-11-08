@@ -87,6 +87,7 @@ public sealed record ServerStatusReportDto(
     ManagedServerState State,
     string? Activity,
     int? ProgressPercent,
+    Guid? InstalledBuildId,
     int? InstalledRevision,
     IReadOnlyList<string> Players,
     double CpuPercent,

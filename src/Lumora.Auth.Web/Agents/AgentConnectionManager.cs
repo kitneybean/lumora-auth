@@ -176,7 +176,7 @@ public sealed class AgentConnectionManager(IHubContext<AgentHub> hub, ILogger<Ag
 
     private static bool SameStatus(ServerStatusReportDto a, ServerStatusReportDto b) =>
         a.State == b.State && a.Activity == b.Activity && a.ProgressPercent == b.ProgressPercent
-        && a.InstalledRevision == b.InstalledRevision && a.Players.SequenceEqual(b.Players)
+        && a.InstalledRevision == b.InstalledRevision && a.InstalledBuildId == b.InstalledBuildId && a.Players.SequenceEqual(b.Players)
         && a.LastError == b.LastError && Math.Abs(a.CpuPercent - b.CpuPercent) < 0.5 && a.MemoryMb == b.MemoryMb;
 
     private void Raise(Action<Guid>? handler, Guid id)

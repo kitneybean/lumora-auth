@@ -419,7 +419,7 @@
     private string? settingsError;
 
     private bool UpdateAvailable => server?.GameBuild is { IsPublished: true } b && status is not null
-        && (status.InstalledRevision is null || status.InstalledRevision < b.Revision);
+        && (status.InstalledRevision is null || status.InstalledBuildId != b.Id || status.InstalledRevision < b.Revision);
 
     protected override async Task OnInitializedAsync()
     {
