@@ -1,0 +1,30 @@
+@using Lumora.Contracts
+@* State of a server run by an agent. *@
+@if (!Managed)
+{
+    <span class="badge text-bg-light">вручную</span>
+}
+else if (Status is null)
+{
+    <span class="badge text-bg-secondary"><span class="lm-dot me-1"></span>агент не в сети</span>
+}
+else
+{
+    var (text, css) = Status.State switch
+    {
+        ManagedServerState.Running => ("работает", "text-bg-success"),
+        ManagedServerState.Starting => ("запускается", "text-bg-primary"),
+        ManagedServerState.Stopping => ("останавливается", "text-bg-warning"),
+        ManagedServerState.Installing => ("устанавливается", "text-bg-primary"),
+        ManagedServerState.Crashed => ("упал", "text-bg-danger"),
+        ManagedServerState.NotInstalled => ("не установлен", "text-bg-warning"),
+        ManagedServerState.Stopped => ("остановлен", "text-bg-secondary"),
+        _ => ("неизвестно", "text-bg-secondary"),
+    };
+    <span class="badge @css"><span class="lm-dot @(Status.State == ManagedServerState.Running ? "online" : "") me-1"></span>@text</span>
+}
+
+@code {
+    [Parameter] public bool Managed { get; set; }
+    [Parameter] public ServerStatusReportDto? Status { get; set; }
+}

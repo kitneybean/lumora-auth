@@ -1,0 +1,195 @@
+@page "/admin/agents"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject AgentService AgentsService
+@inject AgentConnectionManager Connections
+@inject Microsoft.Extensions.Options.IOptions<Lumora.Auth.Web.LumoraOptions> Options
+
+<PageTitle>Агенты — Lumora</PageTitle>
+
+<AdminNav Title="Агенты" Subtitle="Машины с Lumora Agent: он сам ставит и запускает игровые серверы, а вы управляете ими отсюда.">
+    <Actions>
+        <button class="btn btn-primary ms-auto" @onclick="() => { adding = true; command = null; }"><Icon Name="agent" Size="18" /> Добавить агента</button>
+    </Actions>
+</AdminNav>
+
+@if (adding)
+{
+    <div class="card mb-4 lm-download">
+        <div class="card-body">
+            <h2 class="h5">Новый агент</h2>
+            @if (command is null)
+            {
+                <p class="text-body-secondary">Сайт выдаст одноразовую команду установки. Выполните её на Linux-машине, где будет работать игровой сервер (нужны systemd, curl и tar; Java агент поставит сам).</p>
+                <div class="d-flex flex-wrap gap-2 align-items-end">
+                    <div>
+                        <label class="form-label" for="agent-name">Название машины</label>
+                        <input id="agent-name" class="form-control" @bind="newName" placeholder="Например, main-vps" maxlength="64" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="CreateTokenAsync">Получить команду</button>
+                    <button class="btn btn-outline-secondary" @onclick="() => adding = false">Отмена</button>
+                </div>
+            }
+            else
+            {
+                <p>Выполните на сервере от root (команда действует до <b>@expires?.ToLocalTime().ToString("HH:mm")</b> и только один раз):</p>
+                <div class="lm-command">
+                    <code>@command</code>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-copy="@command"><Icon Name="copy" Size="16" /> Скопировать</button>
+                </div>
+                <p class="small text-body-secondary mt-2 mb-0">
+                    Скрипт скачает агента из релизов GitHub (<code>@Options.Value.AgentRepository</code>) с проверкой контрольной суммы,
+                    создаст пользователя <code>lumora</code> и службу <code>lumora-agent</code>. Агент появится в списке ниже через несколько секунд.
+                </p>
+            }
+        </div>
+    </div>
+}
+
+@if (agents is null)
+{
+    <p>Загрузка…</p>
+}
+else if (agents.Count == 0)
+{
+    <div class="lm-empty">
+        <Icon Name="agent" Size="32" />
+        <p class="mt-2 mb-0">Агентов пока нет. Нажмите «Добавить агента» и выполните команду на машине с игровым сервером.</p>
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr><th>Агент</th><th>Машина</th><th>Нагрузка</th><th>Серверы</th><th class="text-end"></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var a in agents)
+                {
+                    var session = Connections.Session(a.Id);
+                    <tr @key="a.Id" class="@(a.IsRevoked ? "opacity-50" : "")">
+                        <td>
+                            <div class="fw-semibold d-flex align-items-center gap-2">
+                                <span class="lm-dot @(session is not null ? "online" : "")"></span> @a.Name
+                            </div>
+                            <div class="small text-body-secondary">
+                                @if (a.IsRevoked)
+                                {
+                                    <span class="badge text-bg-danger">отозван</span>
+                                }
+                                else if (session is not null)
+                                {
+                                    @($"в сети · v{a.Version}")
+                                }
+                                else
+                                {
+                                    @(a.LastSeenAt is { } seen ? $"был в сети {seen.ToLocalTime():dd.MM HH:mm}" : "ещё не подключался")
+                                }
+                            </div>
+                        </td>
+                        <td class="small">
+                            <div>@a.Hostname</div>
+                            <div class="text-body-secondary">@a.Os · @a.CpuCount CPU · @FormatMb(a.MemoryMb)</div>
+                        </td>
+                        <td class="small">
+                            @if (session is not null)
+                            {
+                                <div><Icon Name="cpu" Size="16" /> @session.CpuPercent.ToString("0")% CPU</div>
+                                <div class="text-body-secondary"><Icon Name="memory" Size="16" /> @FormatMb(session.MemoryUsedMb) · диск свободно @FormatMb(session.Machine?.DiskFreeMb ?? 0)</div>
+                            }
+                            else
+                            {
+                                <span class="text-body-secondary">—</span>
+                            }
+                        </td>
+                        <td class="small">
+                            @if (a.Servers.Count == 0)
+                            {
+                                <span class="text-body-secondary">нет</span>
+                            }
+                            @foreach (var s in a.Servers)
+                            {
+                                <div><a href="admin/servers/@s.Id">@s.Name</a></div>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">
+                            @if (!a.IsRevoked)
+                            {
+                                @if (confirm == a.Id)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RevokeAsync(a)">Точно отозвать</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirm = null">Нет</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => confirm = a.Id" title="Ключ перестанет работать, агент отключится">Отозвать ключ</button>
+                                }
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => DeleteAsync(a)">Удалить из списка</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-body-secondary">Отозванный агент сразу отключается; игровые серверы на машине продолжат работать, но управлять ими с сайта будет нельзя.</p>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<Agent>? agents;
+    private bool adding;
+    private string newName = "";
+    private string? command;
+    private DateTimeOffset? expires;
+    private Guid? confirm;
+    private string? actor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        actor = AuthState is null ? null : (await AuthState).User.Identity?.Name;
+        Connections.AgentChanged += OnAgentChanged;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync() => agents = await AgentsService.ListAsync();
+
+    private void OnAgentChanged(Guid _) => InvokeAsync(async () =>
+    {
+        await ReloadAsync();
+        StateHasChanged();
+    });
+
+    private async Task CreateTokenAsync()
+    {
+        var (token, until) = await AgentsService.CreateJoinTokenAsync(newName, actor);
+        expires = until;
+        var url = Options.Value.PublicUrl.TrimEnd('/');
+        // Only harmless characters go into a command the admin pastes into a root shell.
+        var safe = new string(newName.Where(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' or ' ').ToArray()).Trim();
+        var name = safe.Length == 0 ? "" : $" --name '{safe}'";
+        command = $"curl -fsSL {url}/agent/install.sh | sudo bash -s -- --token {token}{name}";
+    }
+
+    private async Task RevokeAsync(Agent a)
+    {
+        confirm = null;
+        await AgentsService.RevokeAsync(a.Id, actor);
+        await ReloadAsync();
+    }
+
+    private async Task DeleteAsync(Agent a)
+    {
+        await AgentsService.DeleteAsync(a.Id, actor);
+        await ReloadAsync();
+    }
+
+    private static string FormatMb(long mb) => mb >= 1024 ? $"{mb / 1024.0:0.#} ГБ" : $"{mb} МБ";
+
+    public void Dispose() => Connections.AgentChanged -= OnAgentChanged;
+}

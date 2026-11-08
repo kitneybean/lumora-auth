@@ -58,6 +58,20 @@
         }
     }
 
+    // Live consoles: keep following new lines unless the admin scrolled up to read.
+    const following = new WeakMap();
+    new MutationObserver(() => {
+        document.querySelectorAll("[data-autoscroll]").forEach((el) => {
+            if (!following.has(el)) {
+                following.set(el, true);
+                el.addEventListener("scroll", () => following.set(el, el.scrollHeight - el.scrollTop - el.clientHeight < 40));
+                el.scrollTop = el.scrollHeight;
+            } else if (following.get(el)) {
+                el.scrollTop = el.scrollHeight;
+            }
+        });
+    }).observe(document.body, { childList: true, subtree: true });
+
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
     else init();
     window.Blazor?.addEventListener?.("enhancedload", init);

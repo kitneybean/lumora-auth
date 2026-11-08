@@ -430,3 +430,17 @@ h1:focus { outline: none; }
 .lm-key { font-size: .95rem; letter-spacing: .05em; word-break: break-all; }
 .lm-qr img { display: block; width: 200px; height: 200px; image-rendering: pixelated; }
 .input-group-text { background: var(--lm-surface-2); border-color: var(--lm-border-strong); gap: .35rem; }
+
+/* ---------- Server management ---------- */
+.lm-mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .86rem; }
+.lm-console { height: 60vh; min-height: 320px; overflow-y: auto; background: #07090c; border: 1px solid var(--lm-border); border-radius: var(--lm-radius); padding: .75rem 1rem;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .8rem; line-height: 1.45; color: #c9d1d9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lm-console-lumora { color: var(--lm-accent-hover); }
+.lm-console-cmd { color: #8ab4ff; }
+.lm-console-warn { color: var(--lm-warning); }
+.lm-console-error { color: var(--lm-danger); }
+.lm-editor { min-height: 60vh; white-space: pre; }
+.lm-command { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; background: var(--lm-sunken); border: 1px solid var(--lm-border-strong); border-radius: var(--lm-radius-sm); padding: .75rem 1rem; }
+.lm-command code { flex: 1 1 320px; color: #9fe8c4; word-break: break-all; font-size: .88rem; }
+.lm-eula { padding: .75rem 1rem .75rem 2.5rem; border: 1px solid rgba(242, 184, 75, .35); background: rgba(242, 184, 75, .07); border-radius: var(--lm-radius-sm); }
+.progress { --bs-progress-bg: var(--lm-sunken); --bs-progress-bar-bg: var(--lm-accent); }

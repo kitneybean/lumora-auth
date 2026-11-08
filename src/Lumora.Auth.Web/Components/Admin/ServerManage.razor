@@ -1,0 +1,644 @@
+@page "/admin/servers/{Id:guid}"
+@rendermode InteractiveServer
+@implements IDisposable
+@using System.Text.RegularExpressions
+@using Microsoft.EntityFrameworkCore
+@inject AgentService AgentsService
+@inject AgentConnectionManager Connections
+@inject ServerService ServersService
+@inject IDbContextFactory<LumoraDbContext> DbFactory
+
+<PageTitle>@(server?.Name ?? "Сервер") — Lumora</PageTitle>
+
+@if (server is null)
+{
+    <p>@(notFound ? "Сервер не найден." : "Загрузка…")</p>
+    return;
+}
+
+<a href="admin/servers" class="lm-back"><Icon Name="chevron" Size="16" Class="lm-flip" /> Серверы</a>
+<div class="lm-page-head">
+    <h1>@server.Name</h1>
+    <ServerStateBadge Managed="server.AgentId is not null" Status="status" />
+    @if (server.AgentId is not null && status is not null)
+    {
+        <div class="ms-auto d-flex flex-wrap gap-2">
+            @if (status.State is ManagedServerState.Stopped or ManagedServerState.Crashed)
+            {
+                <button class="btn btn-primary" @onclick='() => RunAsync(AgentMethods.Start)' disabled="@busy"><Icon Name="play" Size="18" /> Запустить</button>
+            }
+            @if (status.State is ManagedServerState.Running or ManagedServerState.Starting)
+            {
+                <button class="btn btn-outline-secondary" @onclick='() => RunAsync(AgentMethods.Restart)' disabled="@busy"><Icon Name="restart" Size="18" /> Перезапустить</button>
+                <button class="btn btn-outline-secondary" @onclick='() => RunAsync(AgentMethods.Stop)' disabled="@busy"><Icon Name="stop" Size="18" /> Остановить</button>
+            }
+            @if (status.State is ManagedServerState.Running or ManagedServerState.Starting or ManagedServerState.Stopping)
+            {
+                @if (confirmKill)
+                {
+                    <button class="btn btn-danger" @onclick='() => { confirmKill = false; return RunAsync(AgentMethods.Kill); }'>Точно убить процесс</button>
+                }
+                else
+                {
+                    <button class="btn btn-outline-danger" @onclick="() => confirmKill = true" title="Без сохранения мира"><Icon Name="power" Size="18" /> Убить</button>
+                }
+            }
+            @if (status.State is not (ManagedServerState.Installing or ManagedServerState.Stopping))
+            {
+                <button class="btn @(UpdateAvailable ? "btn-primary" : "btn-outline-secondary")" @onclick='() => RunAsync(AgentMethods.Install)' disabled="@(busy || server.GameBuild is not { IsPublished: true })"
+                        title="Ставит Java, ядро и файлы сборки; запущенный сервер будет перезапущен">
+                    <Icon Name="download" Size="18" /> @(status.InstalledRevision is null ? "Установить" : UpdateAvailable ? "Обновить сборку" : "Переустановить")
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@if (message is not null)
+{
+    <div class="alert @(messageOk ? "alert-success" : "alert-danger") py-2">@message</div>
+}
+
+@if (server.AgentId is null)
+{
+    <div class="alert alert-info">
+        Этим сервером управляют вручную. Чтобы ставить и запускать его с сайта, выберите агента во вкладке «Настройки».
+        Агента можно добавить на странице <a href="admin/agents" class="alert-link">Агенты</a>.
+    </div>
+}
+
+<ul class="nav nav-tabs mb-3">
+    @foreach (var (key, title) in Tabs)
+    {
+        <li class="nav-item">
+            <button type="button" class="nav-link @(tab == key ? "active" : "")" @onclick="() => SwitchTabAsync(key)">@title</button>
+        </li>
+    }
+</ul>
+
+@switch (tab)
+{
+    case "overview":
+        <div class="row g-3">
+            <div class="col-sm-6 col-xl-3">
+                <div class="card admin-stat"><div class="card-body">
+                    <div class="admin-stat-value">@(status?.Players.Count ?? 0)</div>
+                    <div class="text-body-secondary">игроков онлайн</div>
+                </div></div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card admin-stat"><div class="card-body">
+                    <div class="admin-stat-value">@(status is null ? "—" : $"{status.CpuPercent:0}%")</div>
+                    <div class="text-body-secondary">CPU машины на сервер</div>
+                </div></div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card admin-stat"><div class="card-body">
+                    <div class="admin-stat-value">@(status is null ? "—" : FormatMb(status.MemoryMb))</div>
+                    <div class="text-body-secondary">памяти из @FormatMb(server.MemoryMb)</div>
+                </div></div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card admin-stat"><div class="card-body">
+                    <div class="admin-stat-value">@(status?.StartedAt is { } started ? Uptime(started) : "—")</div>
+                    <div class="text-body-secondary">работает</div>
+                </div></div>
+            </div>
+        </div>
+        @if (status?.Activity is { } activity)
+        {
+            <div class="card mt-3"><div class="card-body">
+                <div class="d-flex justify-content-between"><span>@activity</span><span class="text-body-secondary">@(status.ProgressPercent is { } p ? $"{p}%" : "")</span></div>
+                @if (status.ProgressPercent is { } pp)
+                {
+                    <div class="progress mt-2" style="height: 6px"><div class="progress-bar" style="width: @(pp)%"></div></div>
+                }
+            </div></div>
+        }
+        @if (status?.LastError is { } err)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@err</div>
+        }
+        <div class="card mt-3"><div class="card-body">
+            <dl class="lm-props mb-0">
+                <dt>Адрес для игроков</dt><dd><code>@server.ConnectionString</code></dd>
+                <dt>Сборка</dt>
+                <dd>
+                    @if (server.GameBuild is { } b)
+                    {
+                        @($"{b.Name} · {b.MinecraftVersion} · {Builds.LoaderText(b.Loader, b.LoaderVersion)} · r{b.Revision}")
+                        @if (!b.IsPublished) { <span class="badge text-bg-warning ms-1">не опубликована</span> }
+                    }
+                    else
+                    {
+                        <span class="text-body-secondary">не выбрана</span>
+                    }
+                </dd>
+                <dt>Установлено</dt>
+                <dd>
+                    @(status?.InstalledRevision is { } r ? $"r{r}" : "ничего")
+                    @if (UpdateAvailable) { <span class="badge text-bg-primary ms-1">есть обновление сборки</span> }
+                </dd>
+                <dt>Агент</dt>
+                <dd>@(agentName ?? "—")</dd>
+                <dt>EULA Minecraft</dt>
+                <dd>@(server.EulaAcceptedAt is { } at ? $"принята {at.ToLocalTime():dd.MM.yyyy HH:mm} ({server.EulaAcceptedBy})" : "не принята — сервер не запустится")</dd>
+                <dt>Место на диске</dt><dd>@(status is null ? "—" : FormatMb(status.DiskUsedMb))</dd>
+            </dl>
+        </div></div>
+        break;
+
+    case "console":
+        <div class="lm-console" data-autoscroll>
+            @foreach (var line in console)
+            {
+                <div class="@LineClass(line)">@line</div>
+            }
+        </div>
+        <form class="d-flex gap-2 mt-2" @onsubmit="SendAsync">
+            <input class="form-control lm-mono" @bind="commandText" placeholder="Команда сервера, например list или say Привет" disabled="@(status?.State != ManagedServerState.Running)" autocomplete="off" />
+            <button class="btn btn-primary" type="submit" disabled="@(status?.State != ManagedServerState.Running)">Отправить</button>
+        </form>
+        <p class="small text-body-secondary mt-2">Команды уходят в консоль Minecraft (без «/») и пишутся в журнал безопасности.</p>
+        break;
+
+    case "players":
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="card"><div class="card-body">
+                    <h2 class="h5">Онлайн</h2>
+                    @if (status is null || status.Players.Count == 0)
+                    {
+                        <p class="text-body-secondary mb-0">Никого нет.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var p in status.Players)
+                            {
+                                <li class="d-flex align-items-center gap-2 py-1">
+                                    <span class="flex-grow-1 fw-semibold">@p</span>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick='() => CommandAsync($"kick {p}")'>Кикнуть</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick='() => CommandAsync($"op {p}")'>Оператор</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick='() => CommandAsync($"ban {p}")'>Бан</button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card"><div class="card-body">
+                    <h2 class="h5">По нику</h2>
+                    <input class="form-control mb-2" @bind="playerName" placeholder="Ник игрока" maxlength="16" />
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick='() => PlayerCommandAsync("whitelist add")'>В белый список</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick='() => PlayerCommandAsync("whitelist remove")'>Из белого списка</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick='() => PlayerCommandAsync("op")'>Дать оператора</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick='() => PlayerCommandAsync("deop")'>Снять оператора</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick='() => PlayerCommandAsync("pardon")'>Разбанить</button>
+                    </div>
+                    <p class="small text-body-secondary mt-2 mb-0">Работает, когда сервер запущен. Белый список включается ключом <code>white-list=true</code> в настройках.</p>
+                </div></div>
+            </div>
+        </div>
+        break;
+
+    case "files":
+        @if (editingFile is not null)
+        {
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => editingFile = null"><Icon Name="chevron" Size="16" Class="lm-flip" /> К списку</button>
+                <code class="flex-grow-1">@editingFile.Path</code>
+                @if (!editingFile.IsReadOnly)
+                {
+                    <button class="btn btn-sm btn-primary" @onclick="SaveFileAsync" disabled="@busy">Сохранить</button>
+                }
+            </div>
+            <textarea class="form-control lm-mono lm-editor" @bind="fileText" readonly="@editingFile.IsReadOnly" spellcheck="false"></textarea>
+            <p class="small text-body-secondary mt-2">Большинство настроек модов применяются после перезапуска сервера. server.properties сайт частично перезаписывает при запуске (порт, online-mode и ключи из «Настроек»).</p>
+        }
+        else
+        {
+            <div class="d-flex align-items-center gap-1 mb-2 small">
+                <button class="btn btn-sm btn-link px-1" @onclick='() => OpenDirAsync("")'>сервер</button>
+                @{ var acc = ""; }
+                @foreach (var part in filePath.Split('/', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    acc = acc.Length == 0 ? part : acc + "/" + part;
+                    var target = acc;
+                    <span class="text-body-secondary">/</span>
+                    <button class="btn btn-sm btn-link px-1" @onclick="() => OpenDirAsync(target)">@part</button>
+                }
+            </div>
+            @if (files is null)
+            {
+                <p class="text-body-secondary">@(server.AgentId is null || status is null ? "Агент не в сети." : "Загрузка…")</p>
+            }
+            else if (!files.Ok)
+            {
+                <div class="alert alert-warning">@files.Error</div>
+            }
+            else
+            {
+                <div class="list-group">
+                    @foreach (var e in files.Entries)
+                    {
+                        var path = filePath.Length == 0 ? e.Name : filePath + "/" + e.Name;
+                        <button type="button" class="list-group-item list-group-item-action d-flex gap-2 align-items-center" disabled="@(!e.IsDirectory && !e.IsEditable)"
+                                @onclick="() => e.IsDirectory ? OpenDirAsync(path) : OpenFileAsync(path)">
+                            <Icon Name="@(e.IsDirectory ? "archive" : "file")" Size="18" />
+                            <span class="flex-grow-1 text-start">@e.Name</span>
+                            <span class="small text-body-secondary">@(e.IsDirectory ? "" : FormatBytes(e.Size))</span>
+                        </button>
+                    }
+                </div>
+            }
+        }
+        break;
+
+    case "backups":
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+            <button class="btn btn-primary" @onclick='() => RunAsync(AgentMethods.CreateBackup)' disabled="@(busy || status is null)"><Icon Name="archive" Size="18" /> Сделать бэкап сейчас</button>
+            <span class="small text-body-secondary">
+                @(string.IsNullOrEmpty(server.BackupTimes) ? "По расписанию — не настроено." : $"По расписанию: {server.BackupTimes}.") Хранится @server.BackupsToKeep последних.
+            </span>
+        </div>
+        @if (backups is null)
+        {
+            <p class="text-body-secondary">@(status is null ? "Агент не в сети." : "Загрузка…")</p>
+        }
+        else if (backups.Length == 0)
+        {
+            <div class="lm-empty">Бэкапов пока нет.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead><tr><th>Бэкап</th><th>Размер</th><th class="text-end"></th></tr></thead>
+                    <tbody>
+                        @foreach (var bk in backups)
+                        {
+                            <tr @key="bk.Name">
+                                <td><code>@bk.Name</code></td>
+                                <td>@FormatBytes(bk.Size)</td>
+                                <td class="text-end text-nowrap">
+                                    @if (confirmRestore == bk.Name)
+                                    {
+                                        <button class="btn btn-sm btn-danger" @onclick="() => RestoreAsync(bk.Name)">Заменить мир</button>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmRestore = null">Нет</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmRestore = bk.Name" disabled="@(status?.State is not (ManagedServerState.Stopped or ManagedServerState.Crashed))"
+                                                title="Сервер должен быть остановлен">Восстановить</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteBackupAsync(bk.Name)">Удалить</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        break;
+
+    case "settings":
+        <div class="card"><div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="m-agent">Агент (машина)</label>
+                    <select id="m-agent" class="form-select" @bind="edit.AgentId">
+                        <option value="">— управлять вручную —</option>
+                        @foreach (var a in agents.Where(a => !a.IsRevoked))
+                        {
+                            <option value="@a.Id">@a.Name (@a.Hostname)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="m-mem">Память, МБ</label>
+                    <input id="m-mem" type="number" class="form-control" min="512" step="512" @bind="edit.MemoryMb" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="m-keep">Хранить бэкапов</label>
+                    <input id="m-keep" type="number" class="form-control" min="1" max="100" @bind="edit.BackupsToKeep" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="m-restart">Перезапуск по расписанию</label>
+                    <input id="m-restart" class="form-control" @bind="edit.RestartTimes" placeholder="04:00, 16:00" />
+                    <div class="form-text">Время машины с агентом. Игроков предупредят за 5 и за 1 минуту.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="m-backup">Бэкап мира по расписанию</label>
+                    <input id="m-backup" class="form-control" @bind="edit.BackupTimes" placeholder="03:30" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="m-props">server.properties</label>
+                    <textarea id="m-props" class="form-control lm-mono" rows="6" @bind="edit.ServerProperties" placeholder="@PropsHint"></textarea>
+                    <div class="form-text">ключ=значение по строке. Порт, online-mode и enforce-secure-profile сайт ставит сам.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="m-jvm">Дополнительные аргументы JVM</label>
+                    <textarea id="m-jvm" class="form-control lm-mono" rows="6" @bind="edit.ExtraJvmArgs" placeholder="@JvmHint"></textarea>
+                    <div class="form-text">По одному в строке. Память (-Xmx) и authlib-injector задаются автоматически.</div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="m-auto" @bind="edit.AutoStart" />
+                        <label class="form-check-label" for="m-auto">Запускать вместе с агентом (после перезагрузки машины)</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="m-crash" @bind="edit.AutoRestart" />
+                        <label class="form-check-label" for="m-crash">Перезапускать после падения (не больше 3 раз за 10 минут)</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    @if (server.EulaAcceptedAt is null)
+                    {
+                        <div class="form-check lm-eula">
+                            <input class="form-check-input" type="checkbox" id="m-eula" @bind="acceptEula" />
+                            <label class="form-check-label" for="m-eula">
+                                Я прочитал и принимаю <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noopener">EULA Minecraft</a> для этого сервера
+                            </label>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="small text-body-secondary"><Icon Name="check" Size="16" /> EULA принята @server.EulaAcceptedAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm") (@server.EulaAcceptedBy).</div>
+                    }
+                </div>
+            </div>
+            @if (settingsError is not null)
+            {
+                <div class="alert alert-danger py-2 mt-3 mb-0">@settingsError</div>
+            }
+            <button class="btn btn-primary mt-3" @onclick="SaveSettingsAsync" disabled="@busy">Сохранить</button>
+            <span class="small text-body-secondary ms-2">Изменения сразу уходят агенту; память, аргументы и server.properties применяются при следующем запуске.</span>
+        </div></div>
+        break;
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private const string PropsHint = "motd=Добро пожаловать\nmax-players=50\ndifficulty=hard\nwhite-list=false";
+    private const string JvmHint = "-XX:+UseG1GC\n-XX:MaxGCPauseMillis=200";
+
+    private static readonly (string Key, string Title)[] Tabs =
+        [("overview", "Обзор"), ("console", "Консоль"), ("players", "Игроки"), ("files", "Файлы"), ("backups", "Бэкапы"), ("settings", "Настройки")];
+
+    private GameServer? server;
+    private GameServer edit = new() { Name = "", Address = "" };
+    private List<Agent> agents = [];
+    private string? agentName;
+    private ServerStatusReportDto? status;
+    private bool notFound;
+    private string tab = "overview";
+    private bool busy;
+    private bool confirmKill;
+    private string? message;
+    private bool messageOk;
+    private string? actor;
+
+    private List<string> console = [];
+    private string commandText = "";
+    private string playerName = "";
+
+    private string filePath = "";
+    private ServerFileListDto? files;
+    private ServerFileContentDto? editingFile;
+    private string fileText = "";
+
+    private BackupDto[]? backups;
+    private string? confirmRestore;
+
+    private bool acceptEula;
+    private string? settingsError;
+
+    private bool UpdateAvailable => server?.GameBuild is { IsPublished: true } b && status is not null
+        && (status.InstalledRevision is null || status.InstalledRevision < b.Revision);
+
+    protected override async Task OnInitializedAsync()
+    {
+        actor = AuthState is null ? null : (await AuthState).User.Identity?.Name;
+        Connections.ServerChanged += OnServerChanged;
+        Connections.ConsoleAppended += OnConsole;
+        Connections.AgentChanged += OnAgentChanged;
+        await LoadAsync();
+        if (server?.AgentId is not null && status is not null)
+        {
+            var lines = await AgentsService.QueryAsync<string[]>(Id, AgentMethods.GetConsole, [Id]);
+            if (lines is not null)
+                Connections.ResetConsole(Id, lines);
+        }
+        console = Connections.Console(Id).ToList();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        server = await db.Servers.AsNoTracking().Include(s => s.GameBuild).Include(s => s.Agent).FirstOrDefaultAsync(s => s.Id == Id);
+        notFound = server is null;
+        if (server is null)
+            return;
+        agents = await db.Agents.AsNoTracking().OrderBy(a => a.Name).ToListAsync();
+        agentName = server.Agent is { } a ? $"{a.Name} ({a.Hostname}){(Connections.IsOnline(a.Id) ? "" : " — не в сети")}" : null;
+        status = Connections.Status(Id, server.AgentId);
+        edit = new GameServer
+        {
+            Id = server.Id, Name = server.Name, Address = server.Address,
+            AgentId = server.AgentId, MemoryMb = server.MemoryMb, ExtraJvmArgs = server.ExtraJvmArgs, AutoStart = server.AutoStart,
+            AutoRestart = server.AutoRestart, RestartTimes = server.RestartTimes, BackupTimes = server.BackupTimes,
+            BackupsToKeep = server.BackupsToKeep, ServerProperties = server.ServerProperties,
+        };
+    }
+
+    private void OnServerChanged(Guid id)
+    {
+        if (id != Id)
+            return;
+        InvokeAsync(() =>
+        {
+            status = Connections.Status(Id, server?.AgentId);
+            StateHasChanged();
+        });
+    }
+
+    private void OnAgentChanged(Guid agentId)
+    {
+        if (agentId != server?.AgentId)
+            return;
+        InvokeAsync(() =>
+        {
+            status = Connections.Status(Id, server?.AgentId);
+            StateHasChanged();
+        });
+    }
+
+    private void OnConsole(Guid id, IReadOnlyList<string> lines)
+    {
+        if (id != Id)
+            return;
+        InvokeAsync(() =>
+        {
+            console.AddRange(lines);
+            if (console.Count > AgentConnectionManager.ConsoleCapacity)
+                console.RemoveRange(0, console.Count - AgentConnectionManager.ConsoleCapacity);
+            if (tab == "console")
+                StateHasChanged();
+        });
+    }
+
+    private async Task SwitchTabAsync(string key)
+    {
+        tab = key;
+        message = null;
+        if (key == "files" && files is null)
+            await OpenDirAsync(filePath);
+        else if (key == "backups")
+            await LoadBackupsAsync();
+        else if (key == "console")
+            console = Connections.Console(Id).ToList();
+    }
+
+    private async Task RunAsync(string method)
+    {
+        busy = true;
+        var result = await AgentsService.CommandAsync(Id, method, [Id], actor);
+        busy = false;
+        Show(result, method switch
+        {
+            AgentMethods.Start => "Запуск начат.",
+            AgentMethods.Stop => "Сервер сохраняет мир и останавливается.",
+            AgentMethods.Restart => "Перезапуск начат.",
+            AgentMethods.Kill => "Процесс остановлен.",
+            AgentMethods.Install => "Установка началась — прогресс на вкладке «Обзор», подробности в консоли.",
+            AgentMethods.CreateBackup => "Бэкап делается — он появится в списке через минуту.",
+            _ => "Готово.",
+        });
+        if (method == AgentMethods.CreateBackup)
+        {
+            await Task.Delay(1500);
+            await LoadBackupsAsync();
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        var text = commandText.Trim().TrimStart('/');
+        if (text.Length == 0)
+            return;
+        commandText = "";
+        await CommandAsync(text);
+    }
+
+    private async Task CommandAsync(string text)
+    {
+        var result = await AgentsService.CommandAsync(Id, AgentMethods.SendCommand, [Id, text], actor, text);
+        if (!result.Ok || tab != "console")
+            Show(result, $"Команда «{text}» отправлена.");
+    }
+
+    private static readonly Regex NameRegex = new("^[A-Za-z0-9_]{1,16}$");
+
+    private async Task PlayerCommandAsync(string verb)
+    {
+        var name = playerName.Trim();
+        if (!NameRegex.IsMatch(name))
+        {
+            Show(AgentResult.Fail("Ник: латинские буквы, цифры и «_», до 16 символов."), "");
+            return;
+        }
+        await CommandAsync($"{verb} {name}");
+    }
+
+    private async Task OpenDirAsync(string path)
+    {
+        filePath = path;
+        editingFile = null;
+        files = await AgentsService.QueryAsync<ServerFileListDto>(Id, AgentMethods.ListFiles, [Id, path]);
+    }
+
+    private async Task OpenFileAsync(string path)
+    {
+        var content = await AgentsService.QueryAsync<ServerFileContentDto>(Id, AgentMethods.ReadFile, [Id, path]);
+        if (content is null || !content.Ok)
+        {
+            Show(AgentResult.Fail(content?.Error ?? "Агент не ответил."), "");
+            return;
+        }
+        editingFile = content;
+        fileText = content.Content ?? "";
+    }
+
+    private async Task SaveFileAsync()
+    {
+        if (editingFile is null)
+            return;
+        busy = true;
+        var result = await AgentsService.CommandAsync(Id, AgentMethods.WriteFile, [Id, editingFile.Path, fileText], actor, editingFile.Path);
+        busy = false;
+        Show(result, $"Файл {editingFile.Path} сохранён.");
+    }
+
+    private async Task LoadBackupsAsync() =>
+        backups = await AgentsService.QueryAsync<BackupDto[]>(Id, AgentMethods.ListBackups, [Id]);
+
+    private async Task RestoreAsync(string name)
+    {
+        confirmRestore = null;
+        var result = await AgentsService.CommandAsync(Id, AgentMethods.RestoreBackup, [Id, name], actor, name);
+        Show(result, $"Мир восстанавливается из {name}.");
+    }
+
+    private async Task DeleteBackupAsync(string name)
+    {
+        var result = await AgentsService.CommandAsync(Id, AgentMethods.DeleteBackup, [Id, name], actor, name);
+        Show(result, $"Бэкап {name} удалён.");
+        await LoadBackupsAsync();
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        busy = true;
+        settingsError = await ServersService.SaveManagementAsync(edit, acceptEula, actor);
+        busy = false;
+        if (settingsError is not null)
+            return;
+        acceptEula = false;
+        await LoadAsync();
+        Show(AgentResult.Success, "Настройки сохранены.");
+    }
+
+    private void Show(AgentResult result, string okText)
+    {
+        messageOk = result.Ok;
+        message = result.Ok ? okText : result.Error;
+    }
+
+    private static string LineClass(string line) =>
+        line.StartsWith("[Lumora]") ? "lm-console-lumora"
+        : line.StartsWith("> ") ? "lm-console-cmd"
+        : line.Contains("/ERROR]") || line.Contains("Exception") ? "lm-console-error"
+        : line.Contains("/WARN]") ? "lm-console-warn" : "";
+
+    private static string FormatMb(long mb) => mb >= 1024 ? $"{mb / 1024.0:0.#} ГБ" : $"{mb} МБ";
+
+    private static string FormatBytes(long b) => b >= 1 << 20 ? $"{b / (double)(1 << 20):0.#} МБ" : b >= 1024 ? $"{b / 1024} КБ" : $"{b} Б";
+
+    private static string Uptime(DateTimeOffset started)
+    {
+        var t = DateTimeOffset.UtcNow - started;
+        return t.TotalDays >= 1 ? $"{(int)t.TotalDays} д {t.Hours} ч" : t.TotalHours >= 1 ? $"{(int)t.TotalHours} ч {t.Minutes} мин" : $"{t.Minutes} мин";
+    }
+
+    public void Dispose()
+    {
+        Connections.ServerChanged -= OnServerChanged;
+        Connections.ConsoleAppended -= OnConsole;
+        Connections.AgentChanged -= OnAgentChanged;
+    }
+}
