@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Agents/install-agent.sh" LogicalName="Lumora.Auth.Web.Agents.install-agent.sh" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Lumora.Auth.Core\Lumora.Auth.Core.csproj" />
     <ProjectReference Include="..\Lumora.Auth.Data\Lumora.Auth.Data.csproj" />
     <ProjectReference Include="..\Lumora.Contracts\Lumora.Contracts.csproj" />

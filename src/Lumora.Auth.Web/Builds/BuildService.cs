@@ -12,7 +12,7 @@ namespace Lumora.Auth.Web.Builds;
 /// <summary>Admin operations on builds and their files. Uses short-lived contexts (safe for Blazor Server).</summary>
 public sealed class BuildService(
     IDbContextFactory<LumoraDbContext> dbFactory, BuildFileStore store, TimeProvider time,
-    IHttpClientFactory httpFactory, Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
+    IHttpClientFactory httpFactory, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, Agents.AgentService agents)
 {
     public sealed record BuildSummary(
         Guid Id, string Name, string MinecraftVersion, LoaderType Loader, string? LoaderVersion,
@@ -310,12 +310,26 @@ public sealed class BuildService(
             build.SyncRules.Select(r => new SyncRuleDto(r.Path, r.Policy)).ToList(),
             []);
         build.PublishedManifestJson = JsonSerializer.Serialize(manifest, LumoraJson.Options);
+        build.PublishedServerManifestJson = JsonSerializer.Serialize(ServerManifestOf(build), LumoraJson.Options);
         build.IsPublished = true;
         build.PublishedAt = time.GetUtcNow();
         build.UpdatedAt = build.PublishedAt.Value;
         await db.SaveChangesAsync(ct);
+        _ = agents.PushBuildAsync(build.Id);
         return build.Revision;
     }
+
+    /// <summary>
+    /// What a game server needs from the build: files for both sides and server-only files (optional mods that are
+    /// off by default stay out). URLs, server id and authlib-injector are filled in per request.
+    /// </summary>
+    public static ServerManifestDto ServerManifestOf(GameBuild build) => new(
+        Guid.Empty, build.Id, build.Name, build.Revision, build.MinecraftVersion, build.Loader, build.LoaderVersion,
+        build.JavaMajorVersion, build.JvmArguments,
+        build.Files.Where(f => f.Side != FileSide.Client && f.Mode != FileInstallMode.OptionalOff).OrderBy(f => f.Path)
+            .Select(f => new BuildFileDto(f.Path, f.Sha1, f.Size, "", FileInstallMode.Required, f.DisplayName)).ToList(),
+        build.SyncRules.Select(r => new SyncRuleDto(r.Path, r.Policy)).ToList(),
+        null, "");
 
     /// <summary>Hides the build (and its servers) from launchers.</summary>
     public async Task UnpublishAsync(Guid buildId, CancellationToken ct = default)

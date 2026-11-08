@@ -35,6 +35,9 @@ public sealed class LumoraOptions
     /// <summary>GitHub repository ("owner/name") whose latest release the download button points to; empty hides it.</summary>
     public string LauncherRepository { get; set; } = "kitneybean/lumora-launcher";
 
+    /// <summary>GitHub repository ("owner/name") with Lumora Agent releases, used by the agent install script.</summary>
+    public string AgentRepository { get; set; } = "kitneybean/lumora-gameserver";
+
     public SecurityOptions Security { get; set; } = new();
 }
 

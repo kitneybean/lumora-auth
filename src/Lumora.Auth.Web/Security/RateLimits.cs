@@ -85,7 +85,7 @@ public static class RateLimits
 
     /// <summary>Static assets and game files: a page or a modpack needs many of them at once.</summary>
     private static bool IsFileRequest(PathString path) =>
-        path.StartsWithSegments("/api/launcher/files") || path.StartsWithSegments("/textures")
+        path.StartsWithSegments("/api/launcher/files") || path.StartsWithSegments("/api/agent/files") || path.StartsWithSegments("/textures")
         || path.StartsWithSegments("/_framework") || path.StartsWithSegments("/_content")
         || path.StartsWithSegments("/lib") || path.StartsWithSegments("/css") || path.StartsWithSegments("/js")
         || path.StartsWithSegments("/fonts") || path.StartsWithSegments("/img");

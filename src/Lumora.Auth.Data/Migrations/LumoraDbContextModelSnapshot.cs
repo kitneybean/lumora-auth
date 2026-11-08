@@ -24,6 +24,107 @@ namespace Lumora.Auth.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Lumora.Auth.Core.Entities.Agent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CpuCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Hostname")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("KeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("LastIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("MemoryMb")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Os")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KeyHash")
+                        .IsUnique();
+
+                    b.ToTable("Agents");
+                });
+
+            modelBuilder.Entity("Lumora.Auth.Core.Entities.AgentJoinToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AgentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("AgentJoinTokens");
+                });
+
             modelBuilder.Entity("Lumora.Auth.Core.Entities.AuditEvent", b =>
                 {
                     b.Property<long>("Id")
@@ -160,6 +261,9 @@ namespace Lumora.Auth.Data.Migrations
                     b.Property<string>("PublishedManifestJson")
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("PublishedServerManifestJson")
+                        .HasColumnType("text");
+
                     b.Property<int>("RecommendedMemoryMb")
                         .HasColumnType("integer");
 
@@ -188,11 +292,38 @@ namespace Lumora.Auth.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<Guid?>("AgentId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("AutoConnect")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("AutoRestart")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AutoStart")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("BackupTimes")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("BackupsToKeep")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Description")
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("EulaAcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EulaAcceptedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ExtraJvmArgs")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
 
                     b.Property<Guid?>("GameBuildId")
                         .HasColumnType("uuid");
@@ -203,6 +334,9 @@ namespace Lumora.Auth.Data.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("MemoryMb")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -211,10 +345,20 @@ namespace Lumora.Auth.Data.Migrations
                     b.Property<int>("Port")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RestartTimes")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ServerProperties")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AgentId");
 
                     b.HasIndex("GameBuildId");
 
@@ -696,10 +840,17 @@ namespace Lumora.Auth.Data.Migrations
 
             modelBuilder.Entity("Lumora.Auth.Core.Entities.GameServer", b =>
                 {
+                    b.HasOne("Lumora.Auth.Core.Entities.Agent", "Agent")
+                        .WithMany("Servers")
+                        .HasForeignKey("AgentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Lumora.Auth.Core.Entities.GameBuild", "GameBuild")
                         .WithMany("Servers")
                         .HasForeignKey("GameBuildId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Agent");
 
                     b.Navigation("GameBuild");
                 });
@@ -827,6 +978,11 @@ namespace Lumora.Auth.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Lumora.Auth.Core.Entities.Agent", b =>
+                {
+                    b.Navigation("Servers");
                 });
 
             modelBuilder.Entity("Lumora.Auth.Core.Entities.GameBuild", b =>

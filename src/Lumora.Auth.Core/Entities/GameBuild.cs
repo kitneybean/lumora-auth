@@ -40,6 +40,9 @@ public class GameBuild
     /// </summary>
     public string? PublishedManifestJson { get; set; }
 
+    /// <summary>Server-side manifest frozen at publish time (files for Both and Server sides).</summary>
+    public string? PublishedServerManifestJson { get; set; }
+
     /// <summary>True when the build was changed after the last publish.</summary>
     public bool HasUnpublishedChanges => PublishedAt is null || UpdatedAt > PublishedAt;
 

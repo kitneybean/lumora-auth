@@ -16,6 +16,8 @@ public class LumoraDbContext(DbContextOptions<LumoraDbContext> options)
     public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
     public DbSet<IpRule> IpRules => Set<IpRule>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<Agent> Agents => Set<Agent>();
+    public DbSet<AgentJoinToken> AgentJoinTokens => Set<AgentJoinToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -128,6 +130,35 @@ public class LumoraDbContext(DbContextOptions<LumoraDbContext> options)
             e.Ignore(s => s.ConnectionString);
             e.HasOne(s => s.GameBuild).WithMany(b => b.Servers).HasForeignKey(s => s.GameBuildId)
                 .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(s => s.Agent).WithMany(a => a.Servers).HasForeignKey(s => s.AgentId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.Property(s => s.ExtraJvmArgs).HasMaxLength(4000);
+            e.Property(s => s.RestartTimes).HasMaxLength(200);
+            e.Property(s => s.BackupTimes).HasMaxLength(200);
+            e.Property(s => s.ServerProperties).HasMaxLength(8000);
+            e.Property(s => s.EulaAcceptedBy).HasMaxLength(256);
+        });
+
+        builder.Entity<Agent>(e =>
+        {
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Name).HasMaxLength(64);
+            e.Property(a => a.KeyHash).HasMaxLength(64);
+            e.HasIndex(a => a.KeyHash).IsUnique();
+            e.Property(a => a.CreatedBy).HasMaxLength(256);
+            e.Property(a => a.LastIp).HasMaxLength(64);
+            e.Property(a => a.Version).HasMaxLength(32);
+            e.Property(a => a.Os).HasMaxLength(128);
+            e.Property(a => a.Hostname).HasMaxLength(128);
+        });
+
+        builder.Entity<AgentJoinToken>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.Property(t => t.TokenHash).HasMaxLength(64);
+            e.HasIndex(t => t.TokenHash).IsUnique();
+            e.Property(t => t.Name).HasMaxLength(64);
+            e.Property(t => t.CreatedBy).HasMaxLength(256);
         });
     }
 

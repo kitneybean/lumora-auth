@@ -30,6 +30,41 @@ public class GameServer
 
     public bool IsEnabled { get; set; } = true;
 
+    // ---- Managed by Lumora Agent (all optional: a server can also be just an address) ----
+
+    /// <summary>Agent that installs and runs this server; null for servers run by hand.</summary>
+    public Guid? AgentId { get; set; }
+
+    public Agent? Agent { get; set; }
+
+    /// <summary>Java heap for the server (-Xmx), MB.</summary>
+    public int MemoryMb { get; set; } = 4096;
+
+    /// <summary>Extra JVM arguments, one per line.</summary>
+    public string? ExtraJvmArgs { get; set; }
+
+    /// <summary>Start together with the agent (machine boot).</summary>
+    public bool AutoStart { get; set; } = true;
+
+    /// <summary>Start again after a crash.</summary>
+    public bool AutoRestart { get; set; } = true;
+
+    /// <summary>Daily restart times "HH:mm", comma separated (agent local time).</summary>
+    public string? RestartTimes { get; set; }
+
+    /// <summary>Daily world backup times "HH:mm", comma separated.</summary>
+    public string? BackupTimes { get; set; }
+
+    public int BackupsToKeep { get; set; } = 7;
+
+    /// <summary>server.properties values forced by the site, "key=value" per line.</summary>
+    public string? ServerProperties { get; set; }
+
+    /// <summary>When and by whom the Minecraft EULA was accepted for this server.</summary>
+    public DateTimeOffset? EulaAcceptedAt { get; set; }
+
+    public string? EulaAcceptedBy { get; set; }
+
     /// <summary>"host" or "host:port" as Minecraft expects it.</summary>
     public string ConnectionString => Port == 25565 ? Address : $"{Address}:{Port}";
 }

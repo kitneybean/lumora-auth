@@ -9,6 +9,9 @@ public static class Policies
     /// <summary>Admin role and, unless disabled in settings, a sign-in with two-factor authentication.</summary>
     public const string Admin = "AdminWith2fa";
 
+    /// <summary>A registered Lumora Agent (key in the Authorization header).</summary>
+    public const string Agent = "Agent";
+
     /// <summary>Identity adds amr=mfa to the cookie after a two-factor sign-in.</summary>
     public static bool HasMfa(ClaimsPrincipal user) => user.HasClaim("amr", "mfa");
 }
@@ -34,7 +37,10 @@ public static class SecuritySetup
         services.AddAuthorizationBuilder()
             .AddPolicy(Policies.Admin, p => p
                 .RequireRole(Roles.Admin)
-                .RequireAssertion(ctx => !requireMfa || Policies.HasMfa(ctx.User)));
+                .RequireAssertion(ctx => !requireMfa || Policies.HasMfa(ctx.User)))
+            .AddPolicy(Policies.Agent, p => p
+                .AddAuthenticationSchemes(Lumora.Auth.Web.Agents.AgentAuthenticationHandler.SchemeName)
+                .RequireRole(Lumora.Auth.Web.Agents.AgentAuthenticationHandler.Role));
         return services;
     }
 
