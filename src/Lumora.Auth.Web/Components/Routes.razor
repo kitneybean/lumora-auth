@@ -1,9 +1,22 @@
 ﻿@using Lumora.Auth.Web.Components.Account.Shared
+@using Lumora.Auth.Data
 <Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
             <NotAuthorized>
-                <RedirectToLogin />
+                @if (context.User.Identity?.IsAuthenticated != true)
+                {
+                    <RedirectToLogin />
+                }
+                else if (context.User.IsInRole(Roles.Admin))
+                {
+                    <Lumora.Auth.Web.Components.Shared.AdminNeeds2fa />
+                }
+                else
+                {
+                    <h1>Нет доступа</h1>
+                    <p>Эта страница доступна только администраторам.</p>
+                }
             </NotAuthorized>
         </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />

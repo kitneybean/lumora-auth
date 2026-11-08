@@ -1,6 +1,7 @@
 @page "/admin/servers"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Forms
+@inject AdminAudit Audit
 @inject ServerService ServersService
 @inject BuildService BuildsService
 
@@ -208,6 +209,8 @@
         if (edit is null)
             return;
         error = await ServersService.SaveAsync(edit);
+        if (error is null)
+            await Audit.LogAsync(isNew ? "server.create" : "server.update", $"{edit.Name} {edit.Address}:{edit.Port}");
         if (error is not null)
             return;
         saved = $"Сервер «{edit.Name}» сохранён.";
@@ -220,6 +223,7 @@
         if (edit is null)
             return;
         await ServersService.DeleteAsync(edit.Id);
+        await Audit.LogAsync("server.delete", $"{edit.Name} {edit.Address}:{edit.Port}");
         saved = $"Сервер «{edit.Name}» удалён.";
         edit = null;
         await ReloadAsync();

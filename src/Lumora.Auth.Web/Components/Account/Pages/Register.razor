@@ -15,6 +15,8 @@
 @inject ProfileService Profiles
 @inject Lumora.Auth.Web.Settings.SiteSettingsService Site
 @inject ILogger<Register> Logger
+@inject Lumora.Auth.Web.Security.RegistrationGuard RegistrationGuard
+@inject Lumora.Auth.Web.Security.AuditService Audit
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
@@ -57,6 +59,11 @@
                 <label for="Input.ConfirmPassword">Пароль ещё раз</label>
                 <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
             </div>
+            @* Honeypot: hidden from people, bots fill every field. *@
+            <div class="lm-hp" aria-hidden="true">
+                <label for="Input.Website">Сайт</label>
+                <InputText @bind-Value="Input.Website" id="Input.Website" tabindex="-1" autocomplete="off" />
+            </div>
             <button type="submit" class="w-100 btn btn-lg btn-primary">Зарегистрироваться</button>
             <p class="mt-3">Уже есть аккаунт? <a href="Account/Login">Войти</a></p>
         </EditForm>
@@ -74,6 +81,9 @@
 
     private string? Message => errorMessage is null ? null : $"Error: {errorMessage}";
 
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
     protected override void OnInitialized()
     {
         Input ??= new();
@@ -83,6 +93,18 @@
     {
         if (!Site.Current.RegistrationOpen)
             return;
+        if (!string.IsNullOrEmpty(Input.Website))
+        {
+            Audit.Log(HttpContext, "account.register", false, "бот: заполнено скрытое поле", userName: Input.Email);
+            errorMessage = "Не удалось зарегистрироваться.";
+            return;
+        }
+        if (!RegistrationGuard.TryRegister(Lumora.Auth.Web.Security.ClientIp.Of(HttpContext)))
+        {
+            Audit.Log(HttpContext, "account.register", false, "лимит регистраций с IP", userName: Input.Email);
+            errorMessage = "С этого адреса уже регистрировались несколько раз. Попробуйте через час.";
+            return;
+        }
         var playerName = Input.PlayerName.Trim();
         if (await Profiles.ValidateNameAsync(playerName) is { } nameError)
         {
@@ -108,6 +130,7 @@
         }
 
         Logger.LogInformation("Registered {Email} as {Player}", Input.Email, playerName);
+        Audit.Log(HttpContext, "account.register", true, $"ник {playerName}", userName: Input.Email);
 
         var userId = await UserManager.GetUserIdAsync(user);
         var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
@@ -133,6 +156,9 @@
 
     private sealed class InputModel
     {
+        /// <summary>Honeypot field; must stay empty.</summary>
+        public string? Website { get; set; }
+
         [Required(ErrorMessage = "Укажите ник.")]
         [RegularExpression("^[A-Za-z0-9_]{3,16}$", ErrorMessage = "Ник: " + ProfileService.NameRules)]
         public string PlayerName { get; set; } = "";

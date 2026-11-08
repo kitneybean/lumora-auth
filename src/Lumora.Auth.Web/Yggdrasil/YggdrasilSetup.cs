@@ -18,23 +18,7 @@ public static class YggdrasilSetup
         services.AddSingleton<JoinStore>();
         services.AddSingleton<ProfileWriter>();
         services.AddScoped<TokenService>();
-
-        var permitsPerMinute = config.GetValue("Lumora:AuthAttemptsPerMinute", 10);
-        services.AddRateLimiter(o =>
-        {
-            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            o.OnRejected = async (ctx, ct) =>
-            {
-                ctx.HttpContext.Response.ContentType = "application/json; charset=utf-8";
-                await ctx.HttpContext.Response.WriteAsJsonAsync(
-                    new ErrorResponse("ForbiddenOperationException", "Слишком много попыток входа. Подождите минуту."),
-                    YggdrasilJson.Options, ct);
-            };
-            o.AddPolicy(YggdrasilEndpoints.AuthRateLimitPolicy, http =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    _ => new FixedWindowRateLimiterOptions { PermitLimit = permitsPerMinute, Window = TimeSpan.FromMinutes(1) }));
-        });
+        // Rate limits (including the Yggdrasil login policy) live in Security/RateLimits.cs.
         return services;
     }
 

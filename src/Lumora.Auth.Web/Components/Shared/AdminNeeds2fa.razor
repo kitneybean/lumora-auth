@@ -1,0 +1,17 @@
+@* Shown to an admin who signed in without two-factor authentication. *@
+<div class="lm-notice">
+    <h1>Нужна двухфакторная защита</h1>
+    <p>
+        Админка управляет аккаунтами, сборками и игровыми серверами, поэтому вход в неё возможен только с кодом
+        из приложения-аутентификатора (Google Authenticator, Яндекс Ключ, Aegis, 1Password и т. п.).
+    </p>
+    <ol>
+        <li>Включите защиту: <a href="Account/Manage/TwoFactorAuthentication">Мой аккаунт → Двухфакторная защита</a>.</li>
+        <li>Выйдите и войдите снова — после пароля сайт спросит код из приложения.</li>
+    </ol>
+    <form action="Account/Logout" method="post">
+        <AntiforgeryToken />
+        <input type="hidden" name="ReturnUrl" value="Account/Login?ReturnUrl=%2Fadmin" />
+        <button type="submit" class="btn btn-primary">Выйти и войти с кодом</button>
+    </form>
+</div>

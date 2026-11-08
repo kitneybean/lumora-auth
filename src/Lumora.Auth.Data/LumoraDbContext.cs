@@ -14,6 +14,8 @@ public class LumoraDbContext(DbContextOptions<LumoraDbContext> options)
     public DbSet<BuildFile> BuildFiles => Set<BuildFile>();
     public DbSet<GameServer> Servers => Set<GameServer>();
     public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
+    public DbSet<IpRule> IpRules => Set<IpRule>();
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -79,6 +81,31 @@ public class LumoraDbContext(DbContextOptions<LumoraDbContext> options)
             e.Property(f => f.Side).HasConversion<string>().HasMaxLength(16);
             e.Property(f => f.Mode).HasConversion<string>().HasMaxLength(16);
             e.HasIndex(f => new { f.GameBuildId, f.Path }).IsUnique();
+        });
+
+        builder.Entity<IpRule>(e =>
+        {
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Network).HasMaxLength(64);
+            e.Property(r => r.Kind).HasConversion<string>().HasMaxLength(16);
+            e.Property(r => r.Source).HasMaxLength(16);
+            e.Property(r => r.Reason).HasMaxLength(256);
+            e.Property(r => r.CreatedBy).HasMaxLength(256);
+            e.HasIndex(r => r.Network);
+            e.HasIndex(r => r.ExpiresAt);
+        });
+
+        builder.Entity<AuditEvent>(e =>
+        {
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Action).HasMaxLength(64);
+            e.Property(a => a.UserId).HasMaxLength(64);
+            e.Property(a => a.UserName).HasMaxLength(256);
+            e.Property(a => a.Ip).HasMaxLength(64);
+            e.Property(a => a.Details).HasMaxLength(2000);
+            e.HasIndex(a => a.At);
+            e.HasIndex(a => a.Action);
+            e.HasIndex(a => a.Ip);
         });
 
         builder.Entity<SiteSettings>(e =>

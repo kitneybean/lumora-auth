@@ -82,10 +82,10 @@ public static class YggdrasilEndpoints
     // ---------------------------------------------------------------- authserver
 
     private static async Task<IResult> Authenticate(
-        AuthenticateRequest request, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn,
+        AuthenticateRequest request, HttpContext http, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn,
         LumoraDbContext db, TokenService tokens, CancellationToken ct)
     {
-        var user = await CheckCredentialsAsync(request.Username, request.Password, users, signIn, db);
+        var user = await CheckCredentialsAsync(http, request.Username, request.Password, users, signIn, db);
         var profile = await db.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == user.Id, ct);
         var clientToken = string.IsNullOrWhiteSpace(request.ClientToken) ? Guid.NewGuid().ToString("N") : request.ClientToken;
         var token = await tokens.IssueAsync(user.Id, clientToken, profile?.Id, ct);
@@ -140,10 +140,10 @@ public static class YggdrasilEndpoints
     }
 
     private static async Task<IResult> Signout(
-        SignoutRequest request, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn,
+        SignoutRequest request, HttpContext http, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn,
         LumoraDbContext db, TokenService tokens, CancellationToken ct)
     {
-        var user = await CheckCredentialsAsync(request.Username, request.Password, users, signIn, db);
+        var user = await CheckCredentialsAsync(http, request.Username, request.Password, users, signIn, db);
         await tokens.RevokeAllAsync(user.Id, ct);
         return Results.NoContent();
     }
@@ -275,8 +275,28 @@ public static class YggdrasilEndpoints
 
     // ---------------------------------------------------------------- helpers
 
-    /// <summary>Finds the account by e-mail or in-game name and checks the password.</summary>
+    /// <summary>Checks credentials and records the attempt in the journal; failures count towards an auto-ban.</summary>
     private static async Task<ApplicationUser> CheckCredentialsAsync(
+        HttpContext http, string? login, string? password, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, LumoraDbContext db)
+    {
+        var audit = http.RequestServices.GetRequiredService<Security.AuditService>();
+        try
+        {
+            var user = await CheckCredentialsCoreAsync(login, password, users, signIn, db);
+            audit.Log("login.launcher", true, user.Id, user.Email, Security.ClientIp.Of(http)?.ToString());
+            return user;
+        }
+        catch (YggdrasilException e)
+        {
+            audit.Log("login.launcher", false, null, login?.Trim(), Security.ClientIp.Of(http)?.ToString(), e.Message);
+            http.RequestServices.GetRequiredService<Security.AutoBanService>()
+                .Record(Security.ClientIp.Of(http), Security.AutoBanService.Offence.FailedLogin);
+            throw;
+        }
+    }
+
+    /// <summary>Finds the account by e-mail or in-game name and checks the password.</summary>
+    private static async Task<ApplicationUser> CheckCredentialsCoreAsync(
         string? login, string? password, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, LumoraDbContext db)
     {
         if (string.IsNullOrWhiteSpace(login) || string.IsNullOrEmpty(password))

@@ -32,6 +32,14 @@ public static class DatabaseInitializer
         var user = await userManager.FindByEmailAsync(admin.Email);
         if (user is null)
         {
+            // A public site must not get an administrator with a default or short password.
+            var env = sp.GetRequiredService<IHostEnvironment>();
+            if (!env.IsDevelopment() && Security.SecuritySetup.IsWeakAdminPassword(admin.Password))
+            {
+                logger.LogError("Administrator {Email} was NOT created: the password is shorter than 12 characters or a default one. " +
+                                "Set a strong Lumora__Admin__Password and restart.", admin.Email);
+                return;
+            }
             user = new ApplicationUser { UserName = admin.Email, Email = admin.Email, EmailConfirmed = true };
             var result = await userManager.CreateAsync(user, admin.Password);
             if (!result.Succeeded)

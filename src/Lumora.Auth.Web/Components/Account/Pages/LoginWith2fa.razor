@@ -8,13 +8,15 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<LoginWith2fa> Logger
+@inject Lumora.Auth.Web.Security.AuditService Audit
+@inject Lumora.Auth.Web.Security.AutoBanService AutoBan
 
-<PageTitle>Two-factor authentication</PageTitle>
+<PageTitle>Код подтверждения — Lumora</PageTitle>
 
-<h1>Two-factor authentication</h1>
+<h1>Код подтверждения</h1>
 <hr />
 <StatusMessage Message="@message" />
-<p>Your login is protected with an authenticator app. Enter your authenticator code below.</p>
+<p>Аккаунт защищён двухфакторной проверкой. Введите шестизначный код из приложения-аутентификатора.</p>
 <div class="row">
     <div class="col-md-4">
         <EditForm Model="Input" FormName="login-with-2fa" OnValidSubmit="OnValidSubmitAsync" method="post">
@@ -24,29 +26,36 @@
             <ValidationSummary class="text-danger" role="alert" />
             <div class="form-floating mb-3">
                 <InputText @bind-Value="Input.TwoFactorCode" id="Input.TwoFactorCode" class="form-control" autocomplete="off" />
-                <label for="Input.TwoFactorCode" class="form-label">Authenticator code</label>
+                <label for="Input.TwoFactorCode" class="form-label">Код из приложения</label>
                 <ValidationMessage For="() => Input.TwoFactorCode" class="text-danger" />
             </div>
-            <div class="checkbox mb-3">
-                <label for="remember-machine" class="form-label">
-                    <InputCheckbox @bind-Value="Input.RememberMachine" />
-                    Remember this machine
-                </label>
-            </div>
+            @if (!isAdmin)
+            {
+                <div class="checkbox mb-3">
+                    <label for="remember-machine" class="form-label">
+                        <InputCheckbox @bind-Value="Input.RememberMachine" />
+                        Запомнить этот компьютер на 14 дней
+                    </label>
+                </div>
+            }
             <div>
-                <button type="submit" class="w-100 btn btn-lg btn-primary">Log in</button>
+                <button type="submit" class="w-100 btn btn-lg btn-primary">Войти</button>
             </div>
         </EditForm>
     </div>
 </div>
 <p>
-    Don't have access to your authenticator device? You can
-    <a href="Account/LoginWithRecoveryCode?ReturnUrl=@ReturnUrl">log in with a recovery code</a>.
+    Нет доступа к телефону? <a href="Account/LoginWithRecoveryCode?ReturnUrl=@ReturnUrl">Войдите с кодом восстановления</a>.
 </p>
 
 @code {
     private string? message;
     private ApplicationUser user = default!;
+    // Admins always enter a code: a remembered computer would not count as two-factor for the admin panel.
+    private bool isAdmin;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = default!;
@@ -64,13 +73,17 @@
         // Ensure the user has gone through the username & password screen first
         user = await SignInManager.GetTwoFactorAuthenticationUserAsync() ??
             throw new InvalidOperationException("Unable to load two-factor authentication user.");
+        isAdmin = await UserManager.IsInRoleAsync(user, Lumora.Auth.Data.Roles.Admin);
     }
 
     private async Task OnValidSubmitAsync()
     {
         var authenticatorCode = Input.TwoFactorCode!.Replace(" ", string.Empty).Replace("-", string.Empty);
-        var result = await SignInManager.TwoFactorAuthenticatorSignInAsync(authenticatorCode, RememberMe, Input.RememberMachine);
+        var result = await SignInManager.TwoFactorAuthenticatorSignInAsync(authenticatorCode, RememberMe, Input.RememberMachine && !isAdmin);
         var userId = await UserManager.GetUserIdAsync(user);
+        Audit.Log(HttpContext, "login.2fa", result.Succeeded, result.Succeeded ? null : "неверный код", userName: user.Email);
+        if (!result.Succeeded)
+            AutoBan.Record(Lumora.Auth.Web.Security.ClientIp.Of(HttpContext), Lumora.Auth.Web.Security.AutoBanService.Offence.FailedLogin);
 
         if (result.Succeeded)
         {
@@ -85,19 +98,19 @@
         else
         {
             Logger.LogWarning("Invalid authenticator code entered for user with ID '{UserId}'.", userId);
-            message = "Error: Invalid authenticator code.";
+            message = "Error: Неверный код. Проверьте время на телефоне и попробуйте ещё раз.";
         }
     }
 
     private sealed class InputModel
     {
         [Required]
-        [StringLength(7, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [StringLength(7, ErrorMessage = "Код — 6 цифр.", MinimumLength = 6)]
         [DataType(DataType.Text)]
-        [Display(Name = "Authenticator code")]
+        [Display(Name = "Код")]
         public string? TwoFactorCode { get; set; }
 
-        [Display(Name = "Remember this machine")]
+        [Display(Name = "Запомнить компьютер")]
         public bool RememberMachine { get; set; }
     }
 }

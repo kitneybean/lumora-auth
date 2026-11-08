@@ -5,4 +5,5 @@
 @using Lumora.Auth.Web.Builds
 @using Lumora.Auth.Web.Launcher
 @using Lumora.Contracts
-@attribute [Authorize(Roles = Roles.Admin)]
+@using Lumora.Auth.Web.Security
+@attribute [Authorize(Policy = Policies.Admin)]

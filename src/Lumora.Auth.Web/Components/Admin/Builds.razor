@@ -1,5 +1,6 @@
 @page "/admin/builds"
 @rendermode InteractiveServer
+@inject AdminAudit Audit
 @inject BuildService BuildsService
 @inject GameVersionsService Versions
 @inject NavigationManager Nav
@@ -122,6 +123,7 @@
         if (loader != LoaderType.Vanilla && string.IsNullOrWhiteSpace(loaderVersion)) { error = "Укажите версию лоадера."; return; }
 
         var id = await BuildsService.CreateAsync(name, mcVersion, loader, loaderVersion);
+        await Audit.LogAsync("build.create", $"{name}: {mcVersion} {loader} {loaderVersion}");
         Nav.NavigateTo($"admin/builds/{id}");
     }
 

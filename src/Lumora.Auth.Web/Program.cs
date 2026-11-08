@@ -4,12 +4,15 @@ using Lumora.Auth.Web.Components;
 using Lumora.Auth.Web.Components.Account;
 using Lumora.Auth.Web.Yggdrasil;
 using Lumora.Auth.Web.Launcher;
+using Lumora.Auth.Web.Security;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+// Do not advertise the web server in responses.
+builder.WebHost.ConfigureKestrel(o => o.AddServerHeader = false);
 
 var lumoraSection = builder.Configuration.GetSection(LumoraOptions.Section);
 builder.Services.Configure<LumoraOptions>(lumoraSection);
@@ -55,6 +58,8 @@ builder.Services.AddSingleton<Lumora.Auth.Web.Settings.SmtpEmailSender>();
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>>(sp => sp.GetRequiredService<Lumora.Auth.Web.Settings.SmtpEmailSender>());
 builder.Services.AddHealthChecks().AddDbContextCheck<LumoraDbContext>();
 builder.Services.AddYggdrasil(builder.Configuration);
+builder.Services.AddLumoraSecurity(builder.Configuration);
+builder.Services.AddScoped<Lumora.Auth.Web.Security.AdminAudit>();
 builder.Services.AddScoped<Lumora.Auth.Web.Profiles.ProfileService>();
 builder.Services.AddScoped<Lumora.Auth.Web.Textures.SkinService>();
 builder.Services.AddSingleton<Lumora.Auth.Web.Builds.BuildFileStore>();
@@ -95,6 +100,9 @@ var app = builder.Build();
 
 if (lumoraSection.GetValue<bool>("BehindProxy"))
     app.UseForwardedHeaders();
+
+// Blocked IPs, scanner probes, hidden /healthz and security headers — before anything else runs.
+app.UseLumoraSecurity();
 
 if (app.Environment.IsDevelopment())
 {

@@ -1,7 +1,8 @@
 // 3D skin preview on the "Скин" page, powered by skinview3d (MIT).
 // Falls back to the flat texture image when the library cannot be loaded.
 (() => {
-    const LIB = "https://cdn.jsdelivr.net/npm/skinview3d@3.1.0/bundles/skinview3d.bundle.js";
+    // Served by the site itself (MIT, from npm skinview3d@3.1.0): no third-party scripts under the CSP.
+    const LIB = "/lib/skinview3d/skinview3d.bundle.js";
     let loading = null;
 
     function loadLibrary() {
@@ -9,7 +10,6 @@
         loading ??= new Promise((resolve, reject) => {
             const script = document.createElement("script");
             script.src = LIB;
-            script.crossOrigin = "anonymous";
             script.onload = resolve;
             script.onerror = reject;
             document.head.appendChild(script);

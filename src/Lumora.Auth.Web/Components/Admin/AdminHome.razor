@@ -1,11 +1,18 @@
 @page "/admin"
 @rendermode InteractiveServer
+@inject Microsoft.Extensions.Options.IOptions<Lumora.Auth.Web.LumoraOptions> Options
+@inject IHostEnvironment Env
 @inject PlayerAdminService Players
 @inject AuthlibInjectorProvider Authlib
 
 <PageTitle>Админка — Lumora</PageTitle>
 
 <AdminNav />
+
+@foreach (var w in SecuritySetup.ConfigurationWarnings(Options.Value, Env))
+{
+    <div class="alert alert-warning py-2">@w <a href="admin/security" class="alert-link">Безопасность →</a></div>
+}
 
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-lg-3">

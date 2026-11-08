@@ -1,6 +1,7 @@
 @page "/admin/builds/{Id:guid}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Forms
+@inject AdminAudit Audit
 @inject BuildService BuildsService
 @inject GameVersionsService Versions
 @inject NavigationManager Nav
@@ -364,6 +365,7 @@
         await RunAsync(async () =>
         {
             await BuildsService.UpdateSettingsAsync(edit);
+            await Audit.LogAsync("build.settings", $"{edit.Name}: Minecraft {edit.MinecraftVersion}, {edit.Loader} {edit.LoaderVersion}");
             await ReloadAsync(resetForm: true);
             Show("Параметры сохранены.");
         });
@@ -440,6 +442,7 @@
                 skipped.AddRange(result.Skipped);
             }
             await ReloadAsync(resetForm: true);
+            await Audit.LogAsync("build.upload", $"{build?.Name}: добавлено {added}, заменено {updated}, файлов в загрузке {list.Count}");
             uploadStatus = string.Join(" ", notes) + (notes.Count > 0 ? " " : "") + $"Готово: добавлено {added}, заменено {updated}."
                 + (skipped.Count > 0 ? $" Пропущено ({skipped.Count}): {string.Join(", ", skipped.Take(10))}{(skipped.Count > 10 ? "…" : "")}" : "");
             if (files.Any(f => f.Path.StartsWith("mods/", StringComparison.Ordinal)))
@@ -479,6 +482,7 @@
         await RunAsync(async () =>
         {
             await BuildsService.DeleteFilesAsync(Id, selected.ToList());
+            await Audit.LogAsync("build.files.delete", $"{build?.Name}: {selected.Count} файлов");
             selected.Clear();
             await ReloadAsync(resetForm: false);
             Show($"Удалено файлов: {count}.");
@@ -492,6 +496,7 @@
         await RunAsync(async () =>
         {
             var revision = await BuildsService.PublishAsync(Id);
+            await Audit.LogAsync("build.publish", $"{build?.Name} r{revision}");
             await ReloadAsync(resetForm: false);
             Show($"Опубликована ревизия r{revision}. Лаунчеры обновят сборку при следующем запуске.");
         });
@@ -500,6 +505,7 @@
     private async Task UnpublishAsync() => await RunAsync(async () =>
     {
         await BuildsService.UnpublishAsync(Id);
+        await Audit.LogAsync("build.unpublish", build?.Name);
         await ReloadAsync(resetForm: false);
         Show("Сборка скрыта из лаунчера.");
     });
@@ -507,6 +513,7 @@
     private async Task DeleteAsync()
     {
         await BuildsService.DeleteAsync(Id);
+        await Audit.LogAsync("build.delete", build?.Name);
         Nav.NavigateTo("admin/builds");
     }
 

@@ -1,8 +1,21 @@
 ﻿@page "/Account/AccessDenied"
+@using Lumora.Auth.Data
+@using Lumora.Auth.Web.Security
 
-<PageTitle>Access denied</PageTitle>
+<PageTitle>Нет доступа — Lumora</PageTitle>
 
-<header>
-    <h1 class="text-danger">Access denied</h1>
-    <p class="text-danger">You do not have access to this resource.</p>
-</header>
+@if (HttpContext.User.IsInRole(Roles.Admin) && !Policies.HasMfa(HttpContext.User))
+{
+    <Lumora.Auth.Web.Components.Shared.AdminNeeds2fa />
+}
+else
+{
+    <h1>Нет доступа</h1>
+    <p>Эта страница доступна только администраторам.</p>
+    <p><a href="">На главную</a></p>
+}
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+}

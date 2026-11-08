@@ -1,0 +1,229 @@
+@page "/admin/security"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@inject IpGuard Guard
+@inject AdminAudit Audit
+@inject IDbContextFactory<LumoraDbContext> DbFactory
+@inject Microsoft.Extensions.Options.IOptions<Lumora.Auth.Web.LumoraOptions> Options
+@inject IHostEnvironment Env
+
+<PageTitle>Безопасность — Lumora</PageTitle>
+
+<AdminNav />
+
+@foreach (var w in SecuritySetup.ConfigurationWarnings(Options.Value, Env))
+{
+    <div class="alert alert-warning py-2">@w</div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card admin-stat"><div class="card-body">
+            <div class="admin-stat-value">@Guard.BlocklistRanges.ToString("N0")</div>
+            <div class="text-body-secondary">подсетей в списках ботнетов</div>
+            <div class="small text-body-secondary">@(Guard.BlocklistUpdatedAt is { } at ? "обновлено " + at.ToLocalTime().ToString("dd.MM HH:mm") : "ещё не загружены")</div>
+        </div></div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card admin-stat"><div class="card-body">
+            <div class="admin-stat-value">@rules.Count(r => r.Kind == IpRuleKind.Block)</div>
+            <div class="text-body-secondary">активных блокировок</div>
+            <div class="small text-body-secondary">из них автобанов: @rules.Count(r => r.Source == "auto")</div>
+        </div></div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card admin-stat"><div class="card-body">
+            <div class="text-body-secondary mb-1">Отклонено запросов с запуска сайта</div>
+            @if (Guard.BlockedCounts.Count == 0)
+            {
+                <div class="small text-body-secondary">пока ни одного</div>
+            }
+            @foreach (var (reason, count) in Guard.BlockedCounts.OrderByDescending(c => c.Value))
+            {
+                <span class="badge text-bg-secondary me-1 mb-1">@reason: @count.ToString("N0")</span>
+            }
+        </div></div>
+    </div>
+</div>
+
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item"><button class="nav-link @(tab == "rules" ? "active" : "")" @onclick="@(() => tab = "rules")">Блокировки и разрешения</button></li>
+    <li class="nav-item"><button class="nav-link @(tab == "audit" ? "active" : "")" @onclick="@(() => ShowAuditAsync())">Журнал</button></li>
+</ul>
+
+@if (tab == "rules")
+{
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Адрес</th><th>Тип</th><th>Причина</th><th>До</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in rules)
+                        {
+                            <tr @key="r.Id">
+                                <td><code>@r.Network</code></td>
+                                <td>
+                                    @if (r.Kind == IpRuleKind.Allow) { <span class="badge text-bg-success">разрешён</span> }
+                                    else if (r.Source == "auto") { <span class="badge text-bg-warning">автобан</span> }
+                                    else { <span class="badge text-bg-danger">заблокирован</span> }
+                                </td>
+                                <td class="small">@r.Reason @(r.CreatedBy is null ? "" : $"({r.CreatedBy})")</td>
+                                <td class="small text-nowrap">@(r.ExpiresAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "навсегда")</td>
+                                <td class="text-end"><button class="btn btn-sm btn-outline-secondary" @onclick="() => RemoveAsync(r)">Снять</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (rules.Count == 0)
+            {
+                <p class="text-body-secondary">Активных правил нет.</p>
+            }
+        </div>
+        <div class="col-xl-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Добавить правило</h5>
+                    <div class="mb-2">
+                        <label class="form-label">IP или подсеть</label>
+                        <input class="form-control" @bind="network" placeholder="203.0.113.7 или 203.0.113.0/24" />
+                    </div>
+                    <div class="mb-2">
+                        <select class="form-select" @bind="kind">
+                            <option value="@IpRuleKind.Block">Заблокировать</option>
+                            <option value="@IpRuleKind.Allow">Разрешить всегда (свой адрес)</option>
+                        </select>
+                    </div>
+                    @if (kind == IpRuleKind.Block)
+                    {
+                        <div class="mb-2">
+                            <select class="form-select" @bind="days">
+                                <option value="1">на 1 день</option>
+                                <option value="7">на 7 дней</option>
+                                <option value="30">на 30 дней</option>
+                                <option value="0">навсегда</option>
+                            </select>
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <input class="form-control" @bind="reason" placeholder="Причина (необязательно)" />
+                    </div>
+                    @if (error is not null) { <div class="alert alert-danger py-2">@error</div> }
+                    <button class="btn btn-primary w-100" @onclick="AddAsync">Добавить</button>
+                    <p class="form-text mt-3 mb-0">
+                        Разрешённые адреса никогда не блокируются и не попадают под автобан — добавьте сюда свой домашний IP.
+                        Ваш текущий адрес виден в журнале у событий входа.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <select class="form-select" style="max-width: 240px" @bind="auditKind" @bind:after="LoadAuditAsync">
+            <option value="">Все события</option>
+            <option value="login.">Входы</option>
+            <option value="account.">Регистрации</option>
+            <option value="admin.">Действия админов</option>
+            <option value="ip.">Блокировки IP</option>
+            <option value="agent.">Агенты</option>
+        </select>
+        <input class="form-control" style="max-width: 220px" placeholder="IP или пользователь" @bind="auditSearch" @bind:after="LoadAuditAsync" />
+        <div class="form-check align-self-center ms-2">
+            <input class="form-check-input" type="checkbox" id="failures" @bind="onlyFailures" @bind:after="LoadAuditAsync" />
+            <label class="form-check-label" for="failures">только неудачи</label>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Время</th><th>Событие</th><th>Кто</th><th>IP</th><th>Подробности</th></tr></thead>
+            <tbody>
+                @foreach (var e in events)
+                {
+                    <tr @key="e.Id" class="@(e.Success ? "" : "table-danger")">
+                        <td class="small text-nowrap">@e.At.ToLocalTime().ToString("dd.MM HH:mm:ss")</td>
+                        <td><code class="small">@e.Action</code></td>
+                        <td class="small text-break">@e.UserName</td>
+                        <td class="small">
+                            @if (e.Ip is not null)
+                            {
+                                <button class="btn btn-link btn-sm p-0" title="Заблокировать на 7 дней" @onclick="() => QuickBlockAsync(e.Ip)">@e.Ip</button>
+                            }
+                        </td>
+                        <td class="small text-break">@e.Details</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-body-secondary">Показаны последние 200 событий по фильтру. Журнал хранится 90 дней. Нажмите на IP, чтобы заблокировать его на 7 дней.</p>
+}
+
+@code {
+    private string tab = "rules";
+    private List<IpRule> rules = [];
+    private string network = "";
+    private IpRuleKind kind = IpRuleKind.Block;
+    private int days = 7;
+    private string reason = "";
+    private string? error;
+    private List<AuditEvent> events = [];
+    private string auditKind = "";
+    private string auditSearch = "";
+    private bool onlyFailures;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnInitializedAsync() => rules = await Guard.ListAsync();
+
+    private async Task<string?> AdminNameAsync() => AuthState is null ? null : (await AuthState).User.Identity?.Name;
+
+    private async Task AddAsync()
+    {
+        error = await Guard.AddManualAsync(network, kind, reason,
+            kind == IpRuleKind.Block && days > 0 ? TimeSpan.FromDays(days) : null, await AdminNameAsync());
+        if (error is null)
+        {
+            network = reason = "";
+            rules = await Guard.ListAsync();
+        }
+    }
+
+    private async Task RemoveAsync(IpRule r)
+    {
+        await Guard.RemoveAsync(r.Id, await AdminNameAsync());
+        rules = await Guard.ListAsync();
+    }
+
+    private async Task QuickBlockAsync(string ip)
+    {
+        error = await Guard.AddManualAsync(ip, IpRuleKind.Block, "из журнала", TimeSpan.FromDays(7), await AdminNameAsync());
+        rules = await Guard.ListAsync();
+        tab = "rules";
+    }
+
+    private async Task ShowAuditAsync()
+    {
+        tab = "audit";
+        await LoadAuditAsync();
+    }
+
+    private async Task LoadAuditAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var q = db.AuditEvents.AsNoTracking();
+        if (auditKind.Length > 0)
+            q = q.Where(e => e.Action.StartsWith(auditKind));
+        if (!string.IsNullOrWhiteSpace(auditSearch))
+        {
+            var s = auditSearch.Trim();
+            q = q.Where(e => e.Ip == s || (e.UserName != null && e.UserName.Contains(s)));
+        }
+        if (onlyFailures)
+            q = q.Where(e => !e.Success);
+        events = await q.OrderByDescending(e => e.At).Take(200).ToListAsync();
+    }
+}

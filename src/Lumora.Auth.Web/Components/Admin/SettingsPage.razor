@@ -1,6 +1,7 @@
 @page "/admin/settings"
 @rendermode InteractiveServer
 @using Lumora.Auth.Web.Settings
+@inject AdminAudit Audit
 @inject SiteSettingsService Site
 @inject SmtpEmailSender Mail
 @inject Microsoft.Extensions.Options.IOptions<LumoraOptions> Options
@@ -201,6 +202,7 @@
         try
         {
             await Site.SaveAsync(s, string.IsNullOrEmpty(newPassword) ? null : newPassword);
+            await Audit.LogAsync("settings.save", $"регистрация {(s.RegistrationOpen ? "открыта" : "закрыта")}, почта {(s.SmtpEnabled ? s.SmtpHost : "выкл")}{(string.IsNullOrEmpty(newPassword) ? "" : ", пароль почты изменён")}");
             Load();
             Show("Настройки сохранены и уже действуют.");
         }
@@ -224,6 +226,7 @@
                 throw new InvalidOperationException("Укажите SMTP-сервер и адрес отправителя.");
             var password = string.IsNullOrEmpty(newPassword) ? Site.SmtpPassword(Site.Current) : newPassword;
             await Mail.SendTestAsync(s, password, testTo!.Trim());
+            await Audit.LogAsync("settings.mail.test", testTo);
             Show($"Письмо отправлено на {testTo}. Если его нет — проверьте «Спам». Не забудьте сохранить настройки.");
         }
         catch (Exception e)

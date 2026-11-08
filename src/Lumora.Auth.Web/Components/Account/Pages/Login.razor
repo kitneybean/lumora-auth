@@ -11,6 +11,8 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 @inject LumoraDbContext Db
+@inject Lumora.Auth.Web.Security.AuditService Audit
+@inject Lumora.Auth.Web.Security.AutoBanService AutoBan
 
 <PageTitle>Вход — Lumora</PageTitle>
 
@@ -120,8 +122,19 @@
                 return;
             }
 
-            result = await SignInManager.PasswordSignInAsync(await UserNameForAsync(Input.Email), Input.Password, Input.RememberMe, lockoutOnFailure: true);
+            var userName = await UserNameForAsync(Input.Email);
+            // Admins always confirm with a code, even on a computer remembered earlier.
+            if (await UserManager.FindByNameAsync(userName) is { } candidate && await UserManager.IsInRoleAsync(candidate, Roles.Admin))
+                await SignInManager.ForgetTwoFactorClientAsync();
+            result = await SignInManager.PasswordSignInAsync(userName, Input.Password, Input.RememberMe, lockoutOnFailure: true);
         }
+
+        var login = Input.Email?.Trim();
+        Audit.Log(HttpContext, "login.site", result.Succeeded || result.RequiresTwoFactor,
+            result.Succeeded ? null : result.RequiresTwoFactor ? "нужен код 2FA" : result.IsLockedOut ? "аккаунт заблокирован" : result.IsNotAllowed ? "e-mail не подтверждён" : "неверный пароль",
+            userName: login);
+        if (!result.Succeeded && !result.RequiresTwoFactor)
+            AutoBan.Record(Lumora.Auth.Web.Security.ClientIp.Of(HttpContext), Lumora.Auth.Web.Security.AutoBanService.Offence.FailedLogin);
 
         if (result.Succeeded)
         {

@@ -1,6 +1,7 @@
 @page "/admin/players"
 @rendermode InteractiveServer
 @using System.Security.Claims
+@inject AdminAudit Audit
 @inject PlayerAdminService PlayersService
 
 <PageTitle>Игроки — Lumora</PageTitle>
@@ -141,6 +142,7 @@
     private async Task BanAsync(PlayerAdminService.PlayerRow p)
     {
         await PlayersService.BanAsync(p.UserId, banReason, banDays == 0 ? null : DateTimeOffset.UtcNow.AddDays(banDays));
+        await Audit.LogAsync("player.ban", $"{p.PlayerName ?? p.Email}: {banReason}, {(banDays == 0 ? "навсегда" : banDays + " дн.")}");
         banning = null;
         message = $"{p.PlayerName ?? p.Email} забанен. Его сессии в лаунчере и на сайте завершены.";
         await LoadAsync();
@@ -149,6 +151,7 @@
     private async Task UnbanAsync(PlayerAdminService.PlayerRow p)
     {
         await PlayersService.UnbanAsync(p.UserId);
+        await Audit.LogAsync("player.unban", p.PlayerName ?? p.Email);
         message = $"{p.PlayerName ?? p.Email} разбанен.";
         await LoadAsync();
     }
@@ -156,6 +159,7 @@
     private async Task ResetSkinAsync(PlayerAdminService.PlayerRow p)
     {
         await PlayersService.ResetSkinAsync(p.UserId);
+        await Audit.LogAsync("player.skin.reset", p.PlayerName);
         message = $"Скин {p.PlayerName} сброшен.";
         await LoadAsync();
     }
@@ -163,6 +167,7 @@
     private async Task ToggleAdminAsync(PlayerAdminService.PlayerRow p)
     {
         await PlayersService.SetAdminAsync(p.UserId, !p.IsAdmin);
+        await Audit.LogAsync(p.IsAdmin ? "player.admin.revoke" : "player.admin.grant", p.Email);
         message = p.IsAdmin ? $"{p.Email} больше не админ." : $"{p.Email} теперь админ (нужно войти заново).";
         await LoadAsync();
     }

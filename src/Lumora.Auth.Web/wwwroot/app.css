@@ -155,3 +155,12 @@ h1:focus {
     color: #fff;
     background: linear-gradient(135deg, #18a35e, #2f6fdb);
 }
+
+/* Honeypot field for bots (registration) */
+.lm-hp {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
