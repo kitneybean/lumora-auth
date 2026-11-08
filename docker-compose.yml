@@ -31,6 +31,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Lumora: Host=db;Port=5432;Database=lumora;Username=lumora;Password=${POSTGRES_PASSWORD:-lumora};GSS Encryption Mode=Disable
       Lumora__PublicUrl: ${LUMORA_PUBLIC_URL:-http://localhost:8080}
+      # true when the site sits behind nginx/openresty/Caddy with HTTPS (X-Forwarded-* headers are trusted then).
+      Lumora__BehindProxy: ${LUMORA_BEHIND_PROXY:-false}
       Lumora__DataPath: /data
       Lumora__Admin__Email: ${LUMORA_ADMIN_EMAIL:-}
       Lumora__Admin__Password: ${LUMORA_ADMIN_PASSWORD:-}
