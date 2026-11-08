@@ -21,6 +21,18 @@ public class ShowcaseTests(LumoraAppFactory app)
         Assert.Equal(os, ShowcaseService.Classify(file).Os);
 
     [Fact]
+    public void Windows_installer_replaces_the_zip_when_present()
+    {
+        LauncherDownload D(string file) => new(ShowcaseService.Classify(file).Os!, ShowcaseService.Classify(file).Label!, "https://github.com/x/" + file, 1);
+        var withInstaller = ShowcaseService.PreferInstallers(
+            [D("Lumora-0.1.3-win-x64.zip"), D("Lumora-Setup-0.1.3-win-x64.exe"), D("Lumora-0.1.3-linux-x64.zip")]).ToList();
+        Assert.Equal(["Lumora-Setup-0.1.3-win-x64.exe", "Lumora-0.1.3-linux-x64.zip"], withInstaller.Select(d => d.Url[21..]).ToArray());
+
+        var zipOnly = ShowcaseService.PreferInstallers([D("Lumora-0.1.2-win-x64.zip")]).ToList();
+        Assert.Single(zipOnly);
+    }
+
+    [Fact]
     public async Task Landing_page_shows_servers_with_live_status()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);

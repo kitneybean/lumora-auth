@@ -100,10 +100,17 @@ public sealed class ShowcaseService(
         }
         return new LauncherRelease(tag.TrimStart('v'), root.GetProperty("html_url").GetString() ?? $"https://github.com/{repo}/releases",
             root.TryGetProperty("published_at", out var p) && p.TryGetDateTimeOffset(out var at) ? at : DateTimeOffset.UtcNow,
-            downloads.OrderBy(d => d.Os switch { "windows" => 0, "linux" => 1, _ => 2 }).ThenBy(d => d.Label).ToList());
+            PreferInstallers(downloads).OrderBy(d => d.Os switch { "windows" => 0, "linux" => 1, _ => 2 }).ThenBy(d => d.Label).ToList());
     }
 
-    /// <summary>Maps release file names like "Lumora-0.1.1-win-x64.zip" to an OS.</summary>
+    /// <summary>When a system has an installer, players get it instead of the bare archive (shortcuts, uninstall entry).</summary>
+    public static IEnumerable<LauncherDownload> PreferInstallers(IReadOnlyList<LauncherDownload> downloads) =>
+        downloads.Where(d => !IsArchive(d.Url) || !downloads.Any(o => o.Os == d.Os && o.Label == d.Label && !IsArchive(o.Url)));
+
+    private static bool IsArchive(string url) =>
+        url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || url.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Maps release file names like "Lumora-0.1.1-win-x64.zip" or "Lumora-Setup-0.1.3-win-x64.exe" to an OS.</summary>
     public static (string? Os, string? Label) Classify(string fileName)
     {
         var n = fileName.ToLowerInvariant();
