@@ -27,7 +27,7 @@
                 <hr />
                 <ValidationSummary class="text-danger" role="alert" />
                 <div class="form-floating mb-3">
-                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username webauthn" aria-required="true" placeholder="Steve или name@example.com" />
+                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="Steve или name@example.com" />
                     <label for="Input.Email" class="form-label">Ник или e-mail</label>
                     <ValidationMessage For="() => Input.Email" class="text-danger" />
                 </div>
@@ -44,11 +44,6 @@
                 </div>
                 <div>
                     <button type="submit" class="w-100 btn btn-lg btn-primary">Войти</button>
-                </div>
-                <hr />
-                <div class="d-flex flex-column">
-                    <span class="text-secondary mx-auto mt-2">OR</span>
-                    <PasskeySubmit Operation="PasskeyOperation.Request" Name="Input.Passkey" EmailName="Input.Email" class="btn btn-link mx-auto">Войти с ключом доступа</PasskeySubmit>
                 </div>
                 <hr />
                 <div>
@@ -102,19 +97,9 @@
 
     public async Task LoginUser()
     {
-        if (!string.IsNullOrEmpty(Input.Passkey?.Error))
-        {
-            errorMessage = $"Error: {Input.Passkey.Error}";
-            return;
-        }
-
+        // Passkey sign-in is not offered: it would bypass the two-factor rule for admins,
+        // and the browser kept showing the system passkey prompt on the login page.
         SignInResult result;
-        if (!string.IsNullOrEmpty(Input.Passkey?.CredentialJson))
-        {
-            // When performing passkey sign-in, don't perform form validation.
-            result = await SignInManager.PasskeySignInAsync(Input.Passkey.CredentialJson);
-        }
-        else
         {
             // If doing a password sign-in, validate the form.
             if (!editContext.Validate())
